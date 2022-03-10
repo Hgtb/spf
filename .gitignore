@@ -4,15 +4,20 @@ bin-release/
 [Oo]bj/
 [Bb]in/
 
+# IDE folders
+.idea/
+__pycache__/
+
 # Other files and folders
 .settings/
+git版本控制使用.md
 
 # Executables
 *.swf
 *.air
 *.ipa
 *.apk
-
+*.json
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
 # should NOT be excluded as they contain compiler settings and other important
