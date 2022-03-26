@@ -1,3 +1,5 @@
+import pandas as pd
+
 from functions import *
 
 
@@ -7,8 +9,24 @@ data_folder_path = "../dataSet/daily/"
 log_path = "../dataSet/dailyData/save_log.json"
 
 
-class DataLoader:
+class DataLoaderInterface:
+    """
+    DataLoader类用于获取数据，来训练神经网络或数据调取
+    """
+    def __init__(self):
+        self.accumulator = 0
+        pass
+
+    def getData(self, TrainDataDates, TargetDataDates):
+        pass
+
+    def reset(self):
+        self.accumulator = 0
+
+
+class DataLoaderBasic(DataLoaderInterface):  # Abandon
     def __init__(self, calenderPath=cal_path, stockListPath=stock_list_path, dataFolderPath=data_folder_path):
+        super().__init__()
         self.data = []
         self.max_data = []  # 顺序与trade_cal中股票顺序一致
         self.calender = pd.read_csv(calenderPath)
@@ -19,9 +37,6 @@ class DataLoader:
         self.stocks_num = len(self.stock_list)
 
         self.daily_data = []
-
-        self.accumulator = 0
-
         self.pt = 0  # 标记trainData输出的最后一天的数据的index
 
     def __daily_data_init(self):
@@ -98,22 +113,54 @@ class DataLoader:
             list_tensor[i] = torch.tensor((list_tensor[i])["close"])
         return torch.stack(list_tensor, dim=0)
 
-    def getData(self, trainDatesDuration=360, testDatesDuration=30):
+    def getData(self, TrainDataDates=360, TargetDataDates=30):
         """
-        :param trainDatesDuration:
-        :param testDatesDuration:
+        :param TrainDataDates:
+        :param TargetDataDates:
         :return tensor[360, 1, 1571, 9], tensor[1571, -1] or tensor[-1, 1571]:
         """
         self.accumulator += 1
-        return self.__getTrainData(trainDatesDuration), self.__getTestData(trainDatesDuration=trainDatesDuration,
-                                                                           testDatesDuration=testDatesDuration)
+        return self.__getTrainData(TrainDataDates), self.__getTestData(trainDatesDuration=TrainDataDates,
+                                                                           testDatesDuration=TargetDataDates)
 
-    def reset(self):
-        self.accumulator = 0
+
+class DataLoaderPro(DataLoaderInterface):  # 最新的dataloader类
+    def __init__(self):
+        super(DataLoaderPro, self).__init__()
+        self.basicDataPath = "../dataSet/rawData/basicData/"    #
+        self.marketDataPath = "../dataSet/rawData/marketData/"  #
+
+        self.stockList = []
+        self.tradeCal = []
+        self.dailyData = []
+        self.dailyMaxData = []
+
+    def __loadTradeCal(self):
+        self.tradeCal = list((pd.read_csv(self.basicDataPath + "tradeCal.csv"))["cal_date"])
+
+    def __loadStockList(self):
+        self.stockList = list((pd.read_csv(self.basicDataPath + "stockList.csv"))["ts_code"])
+
+    def __loadDailyData(self):
+        for date in self.tradeCal:
+            data = pd.read_csv(self.marketDataPath + str(date) + ".csv")
+            # 用列表存储每日最大数据   type(self.dailyData) = list[pd.DataFrame]
+            self.dailyMaxData.append(data.max(axis=0))
+            # 用列表存储归一化行情数据   type(self.dailyData) = list[pd.DataFrame]
+            self.dailyData.append(data.div(data.max(axis=0)))
+
+    def loadData(self):
+        self.__loadTradeCal()
+        self.__loadStockList()
+        self.__loadDailyData()
+
+    def getData(self, TrainDataDates=360, TargetDataDates=30):
+
+        pass
 
 
 if __name__ == "__main__":
-    data_loader = DataLoader()
+    data_loader = DataLoaderBasic()
     data_loader.loadData()
     data_loader.loadDailyData()
     data_loader.saveDailyData()

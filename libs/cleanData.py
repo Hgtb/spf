@@ -2,6 +2,8 @@ import pandas as pd
 from tqdm import tqdm
 from functions import getStockList, getData, detectFolder
 
+# Abandon
+
 wish_start_date = 20100101
 raw_cal_path = "../rawData/tradeCal.csv"
 cal_path = "../dataSet/tradeCal.csv"
