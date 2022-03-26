@@ -46,7 +46,7 @@ class CNN2DLSTM(nn.Module):
 
         # [batchSize, parametersNum, stocksNum]
         self.conv_layer = nn.Sequential(OrderedDict([
-            ("conv0", nn.Conv2d(in_channels=1, out_channels=32, kernel_size=parametersNum)),
+            ("conv0", nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(parametersNum, 3))), # kernel_size = [9, 3]
             ("Sigmoid", nn.Sigmoid()),
             ("", nn.)
             ("conv1", nn.Conv2d(in_channels=1, out_channels=64, kernel_size=3)),

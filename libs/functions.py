@@ -40,31 +40,32 @@ def getTradeDateList(tradeDatePath):
     return trade_date_list
 
 
-def getMax(dataFrame):
+def getMax(dataFrame) -> list:
     return list(dataFrame.max(axis=0))
 
 
-def saveLog(logPath, begin, end, stockNum):
-    import datetime
-    save_log = {"begin": begin,
-                "end": end,
-                "stock_num": stockNum,
-                "save_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 2021-02-10 1:53:03
+def saveLog(logPath, startDate, endDate, stockNum):
+    save_log = {"startDate": startDate,
+                "endDate": endDate,
+                "stockNum": stockNum,
+                "saveTime": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 2021-02-10 1:53:03
                 }
-    save_log = json.dumps(save_log)  # dic -> str
-    log_file = open(logPath, "w")
-    log_file.write(save_log)
-    log_file.close()
+    log_file = open(logPath, mode='w')
+    json.dump(save_log, log_file)  # dic -> str
 
 
-def readLog(logPath):
+def readLog(logPath) -> dir:
     try:
         log_file = open(logPath, "r")
         save_log = json.loads(log_file.read())
         log_file.close()
         return save_log
     except FileNotFoundError:
-        return {}
+        return {"startDate": 0,
+                "endDate": 0,
+                "stock_num": 0,
+                "save_time": 0  # 2021-02-10 1:53:03
+                }
 
 
 def detectFolder(path):
@@ -73,10 +74,23 @@ def detectFolder(path):
 
 
 def storeAsCsv(DataFrame: pd.DataFrame, SavePath: str):
-    try:
-        DataFrame.to_csv(SavePath, index=False)
-    except:
-        print("Save Error")
+    # try:
+    #     DataFrame.to_csv(SavePath, index=False)
+    # finally:
+    #     raise "Save Error"
+    DataFrame.to_csv(SavePath, index=False)
+
+
+def getSliceFromValues(List: list, val1, val2) -> list:
+    assert type(val1) == type(val2)
+    # str(type(List[0])) = <class 'str'>
+    # eval(str(type(List[0])).split("\'") = ['<class ', 'int', '>']
+    # eval(str(type(List[0])).split("\'")[1] = 'int'
+    typeOfElement = str(type(List[0])).split("\'")[1]
+    # 强制类型转换
+    val1 = eval(typeOfElement + "(val1)")
+    val2 = eval(typeOfElement + "(val2)")
+    return List[List.index(val1):List.index(val2) + 1]
 
 
 def printf(Variable, loc, Message: str = ""):
@@ -85,7 +99,6 @@ def printf(Variable, loc, Message: str = ""):
     :param Variable:
     :param loc:
     :param Message:
-    :return:
     """
     VariableName = ""
     for key in loc:
@@ -96,29 +109,6 @@ def printf(Variable, loc, Message: str = ""):
     if Message != "":
         print("Message : ", Message)
     print("Variable Data : \n", Variable)
-
-
-def getCurrentDate() -> int:
-    return int(datetime.datetime.now().strftime('%Y%m%d'))
-
-
-def getYesterday() -> int:
-    return int((datetime.date.today() + datetime.timedelta(days=-1)).strftime("%Y%m%d"))
-
-
-def getCurrentTime() -> int:
-    return int(datetime.datetime.now().strftime('%H'))
-
-
-def getLatestDataDate() -> int:
-    """
-    根据当前时间判断最新数据的日期
-    获取的数据并不可靠，需要进一步根据tradeCal获取真正的日期，这一步放在getData中
-    """
-    if getCurrentTime() > 16:
-        return getCurrentDate()
-    else:
-        return getYesterday()
 
 
 class FrequencyLimitation:  # Tushare 调取数据频率上限：1min 500次 每次5000条
@@ -169,4 +159,5 @@ def Timer(func):
         print('Function {name} '.format(name=func.__name__),
               "time cost : {time_cost}".format(time_cost=end_time - start_time), end="")
         return result
+
     return wrapper(func)

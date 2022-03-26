@@ -4,12 +4,40 @@ import pandas as pd
 from functions import *
 
 
-# class SaveBasicData:
-#     def __init__(self, Token):
-#         ts.set_token(Token)
-#         self.pro = ts.pro_api()
-#         self.wait = FrequencyLimitation()
-#         pass
+def dateNoGreaterThan(date: int, tradeCal: list) -> int:
+    for index in range(len(tradeCal) - 1, -1, -1):  # index = 3, 2, 1, 0
+        if int(tradeCal[index]) <= date:
+            return int(tradeCal[index])
+
+
+def dateNotLessThan(date: int, tradeCal: list) -> int:
+    for index in range(len(tradeCal)):
+        if int(tradeCal[index]) >= date:
+            return int(tradeCal[index])
+
+
+def getCurrentDate() -> int:
+    return int(datetime.datetime.now().strftime('%Y%m%d'))
+
+
+def getYesterday() -> int:
+    return int((datetime.date.today() + datetime.timedelta(days=-1)).strftime("%Y%m%d"))
+
+
+def getCurrentTime() -> int:
+    return int(datetime.datetime.now().strftime('%H'))
+
+
+def getLatestDataDate(tradeCal: list) -> int:
+    """
+    根据当前时间判断最新数据的日期
+    """
+    date = 0
+    if getCurrentTime() > 16:
+        date = getCurrentDate()
+    else:
+        date = getYesterday()
+    return dateNoGreaterThan(date, tradeCal)
 
 
 class DownloadDataInterface:
@@ -147,15 +175,22 @@ class DownloadDataPro(DownloadDataInterface):
         ts.set_token(Token)
         self.pro = ts.pro_api()
         self.wait = FrequencyLimitation()
+
+        self.rawDataPath = "../dataSet/rawData/"
         self.basicDataStoreFolder = "../dataSet/rawData/basicData/"
         self.marketDataStorePath = "../dataSet/rawData/marketData/"
+        self.__initFolder()
 
         self.stockList = pd.DataFrame([])  # 从第一个获取的dailyData中获取，用于统一所有数据的股票及股票顺序
         self.startDate = 20100104
-        self.endDate = getLatestDataDate()
+        self.endDate = 0
         self.tradeCal = []
         self.hfq_columns = ["open", "high", "low", "close", "pre_close", "change"]
         self.detectFolder()
+
+    def __initFolder(self):
+        detectFolder(self.basicDataStoreFolder)
+        detectFolder(self.marketDataStorePath)
 
     def setStartDate(self, startDate):
         self.startDate = startDate  # need a check
@@ -171,18 +206,11 @@ class DownloadDataPro(DownloadDataInterface):
 
     def storeTradeCal(self):
         self.wait()
-        self.tradeCal = self.pro.trade_cal(**{"start_date": 20100101, "is_open": 1}, fields=["cal_date"])
+        self.tradeCal = self.pro.trade_cal(**{"start_date": self.startDate, "is_open": 1}, fields=["cal_date"])
         self.tradeCal.set_axis(["trade_date"], axis='columns', inplace=True)
         storeAsCsv(self.tradeCal, self.basicDataStoreFolder + "tradeCal.csv")
         self.tradeCal = list(self.tradeCal["trade_date"])
-        self.__firstTradeDate()
-
-    def __firstTradeDate(self):
-        """
-        不知道有啥用
-        :return:
-        """
-        self.startDate = self.tradeCal[0]
+        self.startDate = dateNotLessThan(self.startDate, self.tradeCal)
 
     def storeStockList(self):
         self.wait()
@@ -201,12 +229,16 @@ class DownloadDataPro(DownloadDataInterface):
         """
         if self.stockList.empty:
             self.storeStockList()
-        rem = pd.DataFrame()  # save the data in last day
-        for date in tqdm(self.tradeCal):
-            # self.tradeCal中会包含最新一年全年的交易日期，需要提前结束
-            if date > self.endDate:
-                break
+        self.endDate = getLatestDataDate(self.tradeCal)
+        rem = pd.DataFrame()  # 存储前一天的行情数据，用于补全数据
 
+        log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
+        # 获取 大于等于log中的endDate的日期 至 最新数据的日期 的切片
+        tradeCal = getSliceFromValues(self.tradeCal,
+                                      val1=dateNotLessThan(log["endDate"], self.tradeCal),
+                                      val2=self.endDate)
+
+        for date in tqdm(tradeCal):
             # 获取日行情数据和复权因子，并根据ts_code排序
             self.wait()
             daily = self.pro.daily(**{"trade_date": date, }, fields=[
@@ -246,6 +278,8 @@ class DownloadDataPro(DownloadDataInterface):
 
             storeAsCsv(daily, "../dataSet/rawData/marketData/" + str(date) + ".csv")
             rem = daily.copy(deep=True)
+        saveLog(logPath=self.rawDataPath + "storeLog.json",
+                startDate=self.startDate, endDate=self.endDate, stockNum=len(self.stockList))
 
     def storeDailyBasic(self):
         """
@@ -264,5 +298,3 @@ class DownloadDataPro(DownloadDataInterface):
 if __name__ == "__main__":
     downloadData = DownloadDataPro("b54bfb5fc70a78e4962b8c55911b93a0a4ddd4c764115aeee3c301a3")
     downloadData.storeData()
-
-
