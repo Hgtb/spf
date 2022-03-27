@@ -160,9 +160,5 @@ class DataLoaderPro(DataLoaderInterface):  # 最新的dataloader类
 
 
 if __name__ == "__main__":
-    data_loader = DataLoaderBasic()
+    data_loader = DataLoaderPro()
     data_loader.loadData()
-    data_loader.loadDailyData()
-    data_loader.saveDailyData()
-    train_data, test_data = data_loader.getData()
-    print(train_data)

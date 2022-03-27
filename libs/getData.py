@@ -214,18 +214,23 @@ class DownloadDataPro(DownloadDataInterface):
 
     def storeStockList(self):
         self.wait()
-        daily = self.pro.daily(**{"trade_date": self.startDate, }, fields=[
-            "ts_code", "trade_date", "open", "high", "low", "close",
-            "pre_close", "change", "pct_chg", "vol", "amount"])
-        daily = daily.sort_values(by="ts_code")
-        daily = daily.reset_index(drop=True)
-        storeAsCsv(daily, "../dataSet/rawData/basicData/stockList.csv")
-        self.stockList = daily["ts_code"]
+        # 可使用 pro.stock_basic(fields=["ts_code"]) 获取最新所有股票的列表，但是未来股票数量会超过单次数据调取上限
+        latestStockList = pd.concat([self.pro.stock_basic(**{"exchange": "SZSE"}, fields=["ts_code"]),
+                                     self.pro.stock_basic(**{"exchange": "SSE"}, fields=["ts_code"])],
+                                    ignore_index=True)
+        self.wait()
+        daily = self.pro.daily(**{"trade_date": self.startDate, }, fields=["ts_code"])
+
+        # 取开始日期的股票列表与最新股票列表的交集，删去退市股票
+        stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")["ts_code"]  # type(stockList) = pd.Series
+        stockList = stockList.sort_values()
+        stockList = stockList.reset_index(drop=True)
+        storeAsCsv(stockList, "../dataSet/rawData/basicData/stockList.csv")
+        self.stockList = stockList
 
     def storeDailyData(self):
         """
         保存后复权股票日行情数据
-        ToDo(Alex Han) 记录获取的数据的时间段，下一次获取数据时接续上次的数据获取，节省时间。
         """
         if self.stockList.empty:
             self.storeStockList()
@@ -233,10 +238,16 @@ class DownloadDataPro(DownloadDataInterface):
         rem = pd.DataFrame()  # 存储前一天的行情数据，用于补全数据
 
         log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
-        # 获取 大于等于log中的endDate的日期 至 最新数据的日期 的切片
-        tradeCal = getSliceFromValues(self.tradeCal,
-                                      val1=dateNotLessThan(log["endDate"], self.tradeCal),
-                                      val2=self.endDate)
+
+        tradeCal = []
+        if int(log["stockNum"]) != len(self.stockList):
+            # 股票数量改变，则每天的数据都需要重新下载
+            tradeCal = self.tradeCal
+        else:
+            # 获取 大于等于log中的endDate的日期 至 最新数据的日期 的切片
+            tradeCal = getSliceFromValues(self.tradeCal,
+                                          val1=dateNotLessThan(log["endDate"], self.tradeCal),
+                                          val2=self.endDate)
 
         for date in tqdm(tradeCal):
             # 获取日行情数据和复权因子，并根据ts_code排序
