@@ -1,7 +1,6 @@
 import pandas as pd
-
-from functions import *
-
+from os.path import join
+from libs.functions import *
 
 cal_path = "../dataSet/tradeCal.csv"
 stock_list_path = "../dataSet/stockList.csv"
@@ -13,6 +12,7 @@ class DataLoaderInterface:
     """
     DataLoader类用于获取数据，来训练神经网络或数据调取
     """
+
     def __init__(self):
         self.accumulator = 0
         pass
@@ -121,19 +121,24 @@ class DataLoaderBasic(DataLoaderInterface):  # Abandon
         """
         self.accumulator += 1
         return self.__getTrainData(TrainDataDates), self.__getTestData(trainDatesDuration=TrainDataDates,
-                                                                           testDatesDuration=TargetDataDates)
+                                                                       testDatesDuration=TargetDataDates)
 
 
 class DataLoaderPro(DataLoaderInterface):  # 最新的dataloader类
-    def __init__(self):
+    def __init__(self, dataSetPath: str = "../dataSet/"):
         super(DataLoaderPro, self).__init__()
-        self.basicDataPath = "../dataSet/rawData/basicData/"    #
-        self.marketDataPath = "../dataSet/rawData/marketData/"  #
+        self.basicDataPath = join(dataSetPath, "data/basicData/")  #
+        self.marketDataPath = join(dataSetPath, "data/marketData/")  #
+        self.__detectFolder()
 
         self.stockList = []
         self.tradeCal = []
         self.dailyData = []
         self.dailyMaxData = []
+
+    def __detectFolder(self):
+        detectFolder(self.basicDataPath)
+        detectFolder(self.marketDataPath)
 
     def __loadTradeCal(self):
         self.tradeCal = list((pd.read_csv(self.basicDataPath + "tradeCal.csv"))["cal_date"])
@@ -155,7 +160,6 @@ class DataLoaderPro(DataLoaderInterface):  # 最新的dataloader类
         self.__loadDailyData()
 
     def getData(self, TrainDataDates=360, TargetDataDates=30):
-
         pass
 
 

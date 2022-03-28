@@ -5,10 +5,40 @@
 >   完整的代码可以使用 `main.py` 执行或者使用 `jupyter notebook` 调用模块快速使用。
 ## **3. 项目结构**
 > ### **`dataSet\ ` 目录**
-> >目录层级：
-> >dataSet：  
-> >     * 
-> >     *
+> >###########目录层级  
+> > |--- readme.md &emsp;&emsp;&emsp;&emsp;# Help   
+> > |--- main.py  
+> > |--- main.ipynb  
+> > |--- dataSet      &emsp; &emsp; &emsp; &emsp; &emsp; # 存储数据  
+> > |&emsp; |--- data &emsp; &emsp; &emsp; &emsp; &emsp; # 存储处理完的数据   
+> > |&emsp; |&emsp; |--- basicData  &emsp;&emsp; # 存储股票列表、交易日历   
+> > |&emsp; |&emsp; |&emsp; |--- `stockList.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `tradeCal.csv`   
+> > |&emsp; |&emsp; |--- marketData&emsp;&emsp;# 存储行情数据（日）  
+> > |&emsp; |&emsp; |&emsp; |--- `20100104.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `20100105.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `20100106.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `...`   
+> > |&emsp; |--- rawData     &emsp;&emsp;&emsp; &emsp; # 存储原始数据  
+> > |&emsp; |&emsp; |--- basicData  &emsp;&emsp; # 存储行情数据（日）   
+> > |&emsp; |&emsp; |&emsp; |--- `stockList.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `tradeCal.csv`   
+> > |&emsp; |&emsp; |--- marketData&emsp;&emsp;# 存储股票列表、交易日历   
+> > |&emsp; |&emsp; |&emsp; |--- `20100104.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `20100105.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `20100106.csv`   
+> > |&emsp; |&emsp; |&emsp; |--- `...`   
+> > |--- forecastData  
+> > |--- libs  
+> > |&emsp; |--- `__init__.py`   
+> > |&emsp; |--- `dataLoader.py` &emsp; # 从dataSet/data/中加载数据   
+> > |&emsp; |--- `dataProcess.py`&emsp;# 处理dataSet/rawData中的数据  
+> > |&emsp; |--- `functions.py`&emsp;&emsp;# 工具函数文件  
+> > |&emsp; |--- `getData.py`&emsp;&emsp;&emsp;# 从Tushare平台下载数据   
+> > |&emsp; |--- `module.py`&emsp;&emsp; &emsp; # 保存torch模型   
+> > |&emsp; |--- `quant.py` &emsp; &emsp; &emsp; # 量化   
+> > |&emsp; |--- `visualization.py`   # 可视化   
+> > |--- models   # 保存已训练的模型   
 > >
 > ### **`libs\ ` 目录**
 > >在`libs\ `目录下有多个`.py`文件，包括`cleanData.py`，`dataLoader.py`，`dataProcess.py`，`funtions.py`，`getData.py`，
@@ -40,4 +70,5 @@
 * 模型训练框架
 * 数据可视化框架
 * 信号生成框架
-* 回测框架
+* 回测框架（没用）
+

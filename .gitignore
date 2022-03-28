@@ -18,7 +18,7 @@ git版本控制使用.md
 *.ipa
 *.apk
 *.json
-*.ipynb
+libs/*.ipynb
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`
 # should NOT be excluded as they contain compiler settings and other important

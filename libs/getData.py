@@ -1,7 +1,8 @@
-from tqdm import tqdm
 import tushare as ts
 import pandas as pd
-from functions import *
+from os.path import join
+from tqdm import tqdm
+from libs.functions import *
 
 
 def dateNoGreaterThan(date: int, tradeCal: list) -> int:
@@ -55,7 +56,7 @@ class DownloadDataInterface:
 
 
 class DownloadDataBasic(DownloadDataInterface):  # Abandon
-    def __init__(self):
+    def __init__(self, dataSetPath):
         super().__init__()
         self.token = "b54bfb5fc70a78e4962b8c55911b93a0a4ddd4c764115aeee3c301a3"
         ts.set_token(self.token)
@@ -165,7 +166,7 @@ class DownloadDataBasic(DownloadDataInterface):  # Abandon
 
 
 class DownloadDataPro(DownloadDataInterface):
-    def __init__(self, Token):
+    def __init__(self, Token: str, dataSetPath: str = "../dataSet/"):
         """
         需要Tushare账号积分至少600
         调用复权行情,每日指标
@@ -176,9 +177,9 @@ class DownloadDataPro(DownloadDataInterface):
         self.pro = ts.pro_api()
         self.wait = FrequencyLimitation()
 
-        self.rawDataPath = "../dataSet/rawData/"
-        self.basicDataStoreFolder = "../dataSet/rawData/basicData/"
-        self.marketDataStorePath = "../dataSet/rawData/marketData/"
+        self.rawDataPath = join(dataSetPath, "/rawData/")
+        self.basicDataStoreFolder = join(dataSetPath, "rawData/basicData/")
+        self.marketDataStorePath = join(dataSetPath, "rawData/marketData/")
         self.__initFolder()
 
         self.stockList = pd.DataFrame([])  # 从第一个获取的dailyData中获取，用于统一所有数据的股票及股票顺序
@@ -305,7 +306,3 @@ class DownloadDataPro(DownloadDataInterface):
         self.storeDailyData()
         self.storeDailyBasic()
 
-
-if __name__ == "__main__":
-    downloadData = DownloadDataPro("b54bfb5fc70a78e4962b8c55911b93a0a4ddd4c764115aeee3c301a3")
-    downloadData.storeData()
