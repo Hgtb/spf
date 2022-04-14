@@ -10,7 +10,7 @@ __pycache__/
 
 # Other files and folders
 .settings/
-git版本控制使用.md
+libs/dask-worker-space
 
 # Executables
 *.swf
@@ -26,3 +26,4 @@ libs/*.ipynb
 
 # data
 *.csv
+*.nc
