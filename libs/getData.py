@@ -110,12 +110,13 @@ class DownloadData(DownloadDataInterface):
                                      self.pro.stock_basic(**{"exchange": "SSE"}, fields=["ts_code"])],
                                     ignore_index=True)
         self.wait()
-        daily = self.pro.daily(**{"trade_date": self.startDate, }, fields=["ts_code"])
+        daily = self.pro.daily(**{"trade_date": 20080916}, fields=["ts_code"])  # 最后一个1440支股票的日期是20180916
 
         # 取开始日期的股票列表与最新股票列表的交集，删去退市股票
         stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")["ts_code"]  # type(stockList) = pd.Series
         stockList = stockList.sort_values()
         stockList = stockList.reset_index(drop=True)
+
         storeAsCsv(stockList, join(self.basicDataStoreFolder, "stockList.csv"))
         self.stockList = stockList
 

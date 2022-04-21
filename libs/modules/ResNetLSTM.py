@@ -1,5 +1,3 @@
-import winnt
-
 from includes import *
 
 
@@ -9,6 +7,7 @@ class ResidualBlock(nn.Module):
     -> Copy -+-> Conv -> ReLU -> Conv -+-> Plus ->
              |_________________________|
     """
+
     def __init__(self, in_channels, out_channels, downsample=None):
         super(ResidualBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=1,
@@ -43,6 +42,7 @@ class BottleneckBlock(nn.Module):
     -> Copy -+-> Conv1*1 -> ReLU -> Conv3*3 -> ReLU -> Conv1*1 -+-> Plus ->
              |__________________________________________________|
     """
+
     def __init__(self, in_channels, hidden_channels, out_channels, downsample=None):
         super(BottleneckBlock, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, hidden_channels, kernel_size=1, stride=1,
@@ -78,43 +78,54 @@ class BottleneckBlock(nn.Module):
         return out
 
 
-class GoogLeBlock(nn.Module):
+class InceptionV1(nn.Module):
     """
-    GoogLeNet's Block
-
-           +- conv1*1 ->--------- -+
-           +- conv1*1 ->- conv3*3 -+
-    ->-+->-+- conv1*1 ->- conv5*5 -+->-+->-
-       |   +- maxP1*1 ->- conv1*1 -+   |
-       +->---------residual---------->-+
+       +- conv1*1 ->--------- -+
+       +- conv1*1 ->- conv3*3 -+
+    ->-+- conv1*1 ->- conv5*5 -+->-
+       +- maxP3*3 ->- conv1*1 -+
     """
-    def __init__(self, in_channels, hidden_channels, out_channels, downsample=None):
-        """
-        通常out_channels = in_channels
-        :param in_channels:
-        :param hidden_channels:
-        :param out_channels:
-        :param downsample:
-        """
-        super(GoogLeBlock, self).__init__()
+    def __init__(self, in_channels, out_channels, downsample=None):
+        super(InceptionV1, self).__init__()
         # self.
+        self.ReLU = nn.ReLU()
+        pass
+
+    def forward(self, x):
+
+        pass
+
+
+class InceptionV1ResiduaBlock(nn.Module):
+    """
+    结合InceptionV1模块和残差设计的模块
+    ->-+->- InceptionV1 ->-+->-
+       |                   |
+       +->--- Conv1*1 --->-+
+    """
+
+    def __init__(self, in_channels, out_channels, downsample=None):
+        """
+        中间层自动生成
+        """
+        super(InceptionV1ResiduaBlock, self).__init__()
+        self.inceptionV1 = InceptionV1(in_channels=in_channels, out_channels=out_channels)
+
+        self.Conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=1)
+        self.Conv_bn = nn.BatchNorm2d()
+
+        self.ReLU = nn.ReLU()
 
     def forward(self, x):
         residual = x
 
-
-
-
+        out = self.inceptionV1(x)
+        out = self.inceptionV1_bn(out)
 
 
 class ResNetLSTM(nn.Module):
     def __init__(self):
         super(ResNetLSTM, self).__init__()
 
-
     def foeward(self, x):
         pass
-
-
-
-
