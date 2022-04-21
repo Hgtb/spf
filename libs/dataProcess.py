@@ -85,11 +85,13 @@ class DataProcess:
         coordinates = {"Date": tradeCal, "Stock": stockList, "Parameter": parameters}
         self.dailyData = xr.DataArray(data=dailyData, dims=self.dims, coords=coordinates)
 
-    def storeData(self):
+    def storeData(self, path: str = None):
         """
         必须删掉"ts_code项才能正常保存dailyData"
         """
-        with open(join(self.basicDataPath, "basicData.json"), "w") as fp:
+        if path is None:
+            path = self.basicDataPath
+        with open(join(path, "basicData.json"), "w") as fp:
             json.dump(obj={
                 "dims": self.dims,
                 "Date": self.tradeCal,

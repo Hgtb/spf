@@ -1,14 +1,10 @@
-import math
-import torch
-import torch.nn as nn
-import torch.functional as func
-import torch.optim as optim
-from collections import OrderedDict
+from includes import *
+
 
 # ToDo(Alex Han) 使用json或config文件来保存/生成模型
 
-def calculateSize(size: int) -> int:
-    return int((size - 2.0) / 2.0)
+# def calculateSize(size: int) -> int:
+#     return int((size - 2.0) / 2.0)
 
 
 # class Spp2d(nn.Module):
@@ -67,8 +63,11 @@ class Reshape(nn.Module):
         return x.view(self.shape)
 
 
+
+
+
 class Conv2dBlock(nn.Module):
-    def __init__(self, channel_size:list, kernel_size:tuple, padding:list):
+    def __init__(self, channel_size:list, kernel_size:tuple):
         """
         channel_size : [in_channels, hidden_channels, output_channels]
         kernel_size : [H, W]
@@ -77,11 +76,11 @@ class Conv2dBlock(nn.Module):
         """
         super(Conv2dBlock, self).__init__()
         self.block = nn.Sequential(
-            nn.Conv2d(in_channels=channel_size[0], out_channels=channel_size[1], kernel_size=kernel_size, stride=1, padding=padding[0]),
+            nn.Conv2d(in_channels=channel_size[0], out_channels=channel_size[1], kernel_size=kernel_size, stride=1),
             nn.ReLU(),
-            nn.Conv2d(in_channels=channel_size[1], out_channels=channel_size[2], kernel_size=kernel_size, stride=1, padding=padding[1]),
-            nn.AvgPool2d(kernel_size=2, stride=2),
-            nn.ReLU()
+            nn.Conv2d(in_channels=channel_size[1], out_channels=channel_size[2], kernel_size=kernel_size, stride=1),
+            nn.ReLU(),
+            nn.AvgPool2d(kernel_size=2, stride=2, ceil_mode=True)
         )
 
     def forward(self, x):
@@ -104,14 +103,13 @@ class CNN2dLSTM(nn.Module):
         # [batchSize, channel, parametersNum, stocksNum]
         self.conv_layer = nn.Sequential(OrderedDict([
             # 1570 --> 1568 -> 784 --> 782 -> 391 -> 389 -> ...
-            # 1570 --> 1568 -> 1566 --> 783 -> 781 -> 779 -> 390 -> 388 -> 386 -> 193 -> 97 -> 95 -> 93 -> 47 -> 45 -> 43 -> 22 -> 20 -> 18 -> 9 -> 7 -> 5 -> 3 -> 1...
-            ("conv0", nn.Conv2d(in_channels=1, out_channels=32, kernel_size=(parametersNum, 3))), # kernel_size = (9, 3)
-            ("Sigmoid", nn.Sigmoid()),
-            ("conv1", nn.Conv2d(in_channels=32, out_channels=64, kernel_size=(parametersNum, 3))),
-            ("AvgPool", nn.AvgPool2d(kernel_size=2, stride=2)),
-            ("Sigmoid", nn.ReLU),
-            ("Block", nn.ReLU),
-            ("Sigmoid", nn.ReLU),
+            # 1570 --> 1568 -> 1566 --> 783 -> 781 -> 779 -> 390 -> 388 -> 386 -> 193 -> 191 -> 189 -> 95 -> 93 -> 91 -> 46 -> 44 -> 42 -> 40 -> 20 -> 18 -> 16 -> 8 -> 6 -> 4 -> 2 -> 1
+            ("convBlock0", Conv2dBlock(channel_size=[1, 32, 64], kernel_size=(parametersNum, 3))), # 1570 -> 783
+            ("convBlock1", Conv2dBlock(channel_size=[64, 128, 256], kernel_size=(parametersNum, 3))), # 783 -> 390
+            ("convBlock2", Conv2dBlock(channel_size=[256, 512, 1024], kernel_size=(parametersNum, 3))), # 390 -> 193
+            ("convBlock3", Conv2dBlock(channel_size=[64, 128, 256], kernel_size=(parametersNum, 3))), # 193 -> 783
+            ("convBlock4", Conv2dBlock(channel_size=[64, 128, 256], kernel_size=(parametersNum, 3))), # 1570 -> 783
+            ("convBlock5", Conv2dBlock(channel_size=[64, 128, 256], kernel_size=(parametersNum, 3))) # 1570 -> 783
         ]))
         self.lstm_layer = torch.lstm()
         self.linear_layer = nn.Sequential(OrderedDict([
@@ -126,20 +124,13 @@ class CNN2dLSTM(nn.Module):
         return data
 
 
-class LSTM(nn.Module):
-    """
-    单股票LSTM模型
-    输入：tensor.shape = [batch_size, -1, input_size]
-    """
-    def __init__(self):
-        super(LSTM, self).__init__()
-        self.lstm_layer = nn.LSTM(input_size=9, num_layers=3, hidden_size=1024, batch_first=True, dropout=0.2)
-        self.linear_layer = nn.Linear(in_features=1024, out_features=30)
+# ToDo(Alex Han) CNNLSTM新网络结构
 
-    def forward(self, x):
-        x, (h_n, h_c) = self.lstm_layer(x, None)
-        x = self.linear_layer(x)
-        return x
+
+# ToDo(Alex Han) 强化学习
+
+
+
 
 
 

@@ -46,21 +46,18 @@ class DataSet:
 class DataLoader:
     def __init__(self, dataSet: DataSet):
         self.dataSet: DataSet = dataSet
-        self._shifter: int = -1
-        # self._end: int = len(self.dataSet.Date) -
+        self.shifter: int = -1
+        self.len = len(self.dataSet) - (360 + 30) + 1
+
+    def __len__(self):
+        return self.len
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        try:
-            self._shifter += 1
-            return self.dataSet[self._shifter]
-        except:
+        self.shifter += 1
+        if self.shifter < self.len:
+            return self.dataSet[self.shifter]
+        else:
             raise StopIteration
-        # self._shifter += 1
-        # if self._shifter < self._end:
-        #     return self.dataSet[self._shifter]
-        # else:
-        #     raise StopIteration
-
