@@ -4,7 +4,7 @@
 ## **2. 使用方法**
 >   完整的代码可以使用 `main.py` 执行或者使用 `jupyter notebook` 调用模块快速使用。
 ## **2. 依赖模块**
->   `tushare`, `numpy`, `pandas`, `xarray`, `dask`, `proplot`, `tqdm`
+>   `torch`, `tushare`, `numpy`, `pandas`, `xarray`, `dask`, `proplot`, `tqdm`
 ## **3. 项目结构**
 > ### **`dataSet\ ` 目录**
 > >###########目录层级  
@@ -31,11 +31,16 @@
 > > |--- forecastData  
 > > |--- libs  
 > > |&emsp; |--- `__init__.py`   
+> > |&emsp; |--- modules &emsp;&emsp; &emsp; # 保存torch模型代码   
+> > |&emsp; |&emsp; |--- `__init__.py`  
+> > |&emsp; |&emsp; |--- `includes.py`  
+> > |&emsp; |&emsp; |--- `ResNetLSTM.py`  
+> > |&emsp; |&emsp; |---   
+> > |&emsp; |&emsp; |---   
 > > |&emsp; |--- `dataLoader.py` &emsp; # 从dataSet/中加载数据   
 > > |&emsp; |--- `dataProcess.py`&emsp;# 处理dataSet/中的数据  
 > > |&emsp; |--- `functions.py`&emsp;&emsp;# 工具函数文件  
-> > |&emsp; |--- `getData.py`&emsp;&emsp;&emsp;# 从Tushare平台下载数据   
-> > |&emsp; |--- `module.py`&emsp;&emsp; &emsp; # 保存torch模型   
+> > |&emsp; |--- `getData.py`&emsp;&emsp;&emsp;# 从Tushare平台下载数据
 > > |&emsp; |--- `quant.py` &emsp; &emsp; &emsp; # 量化   
 > > |&emsp; |--- `visualization.py`   # 可视化   
 > > |--- models   # 保存已训练的模型   

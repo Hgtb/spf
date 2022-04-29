@@ -10,7 +10,7 @@ import xarray as xr
 def dateNoGreaterThan(date: int, tradeCal: list) -> int:
     for index in range(len(tradeCal) - 1, -1, -1):  # index = 3, 2, 1, 0
         if int(tradeCal[index]) <= date:
-            return int(tradeCal[index])
+            return int(tradeCal[index])  # 20100103
 
 
 def dateNotLessThan(date: int, tradeCal: list) -> int:
@@ -108,12 +108,19 @@ class DownloadData(DownloadDataInterface):
         # 可使用 pro.stock_basic(fields=["ts_code"]) 获取最新所有股票的列表，但是未来股票数量会超过单次数据调取上限
         latestStockList = pd.concat([self.pro.stock_basic(**{"exchange": "SZSE"}, fields=["ts_code"]),
                                      self.pro.stock_basic(**{"exchange": "SSE"}, fields=["ts_code"])],
-                                    ignore_index=True)
-        self.wait()
-        daily = self.pro.daily(**{"trade_date": 20080916}, fields=["ts_code"])  # 最后一个1440支股票的日期是20180916
+                                    ignore_index=True)  # 最近交易日股票列表
 
-        # 取开始日期的股票列表与最新股票列表的交集，删去退市股票
+        self.wait()
+        daily = self.pro.daily(**{"trade_date": 20090807}, fields=["ts_code"])
+        # 最后一个与20100104、最近交易日共有1440支股票的日期是20090807
+
+        self.wait()
+        dailyStart = self.pro.daily(**{"trade_date": self.startDate}, fields=["ts_code"])
+        # 训练数据开始日的股票列表
+
+        # 取开始日期的股票列表与开始日、最近交易日股票列表的交集
         stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")["ts_code"]  # type(stockList) = pd.Series
+        stockList = pd.merge(stockList, dailyStart["ts_code"], how="inner")["ts_code"]
         stockList = stockList.sort_values()
         stockList = stockList.reset_index(drop=True)
 

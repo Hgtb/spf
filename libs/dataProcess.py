@@ -56,17 +56,17 @@ class DataProcess:
         detectFolder(self.marketDataPath)
 
     def __loadTradeCal(self):
-        self.tradeCal = pd.read_csv(self.rawBasicDataPath + "tradeCal.csv")
+        self.tradeCal = pd.read_csv(join(self.rawBasicDataPath, "tradeCal.csv"))
         self.tradeCal = list(self.tradeCal["trade_date"])
         return self.tradeCal
 
     def __loadStockList(self):
-        self.stockList = pd.read_csv(self.rawBasicDataPath + "stockList.csv")
+        self.stockList = pd.read_csv(join(self.rawBasicDataPath, "stockList.csv"), encoding="utf-8")
         self.stockList = list(self.stockList["ts_code"])
         return self.stockList
 
     def __loadParameters(self):
-        self.parameters = pd.read_csv(self.rawBasicDataPath + "parameters.csv")
+        self.parameters = pd.read_csv(join(self.rawBasicDataPath, "parameters.csv"))
         self.parameters = list(self.parameters["Parameters"])
         return self.parameters
 
@@ -127,6 +127,12 @@ class DataProcess:
 
     def dropDataFrame(self, labels: list, dim: str) -> None:  # exp: dropDataFrame("ts_code", "trade_date")
         self.dailyData = self.dailyData.drop(labels=labels, dim=dim)  # 有提示但是能正常运行
+
+    def copyDataFrame(self, label: str, dim: str) -> None:
+        """
+        n次复制同一个dim下的同一个label会复制2^(n-1)个
+        """
+        self.dailyData = xr.concat([self.dailyData.sel(Parameter=label), self.dailyData], dim=dim)
 
     def minMaxNormal(self) -> None:
         """
