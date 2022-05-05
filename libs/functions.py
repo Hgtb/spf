@@ -44,8 +44,8 @@ def getMax(dataFrame) -> list:
     return list(dataFrame.max(axis=0))
 
 
-def saveLog(logPath, startDate, endDate, stockNum):
-    save_log = {"startDate": startDate,
+def saveLog(logPath, dataStartDate, endDate, stockNum):
+    save_log = {"dataStartDate": dataStartDate,
                 "endDate": endDate,
                 "stockNum": stockNum,
                 "saveTime": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')  # 2021-02-10 1:53:03
@@ -61,7 +61,7 @@ def readLog(logPath) -> dir:
         log_file.close()
         return save_log
     except FileNotFoundError:
-        return {"startDate": 0,
+        return {"dataStartDate": 0,
                 "endDate": 0,
                 "stock_num": 0,
                 "save_time": 0  # 2021-02-10 1:53:03
@@ -161,3 +161,19 @@ def Timer(func):
         return result
 
     return wrapper(func)
+
+
+def autoTimeTransform(sec):
+    # _time = ""
+    minutes = 0
+    hours = 0
+    if sec >= 60:
+        minutes = sec // 60
+        sec = sec % 60
+    if minutes >= 60:
+        hours = minutes // 60
+        minutes = minutes % 60
+    return [hours, minutes, sec]
+
+
+

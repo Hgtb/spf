@@ -1,35 +1,51 @@
 from os.path import join
 from libs.functions import *
 from libs.dataProcess import DataProcess
+from typing import List
 import xarray as xr
 import torch
 import numpy as np
+
+
+def DataLength(dataPath):
+    data = xr.load_dataarray(dataPath)
+    return len(data)
 
 
 class DataSet:
     r"""
     生成滑动窗口数据，每步返回两个值: trainData 和 targetData
     trainData.shape = torch.Size([trainDays, stocksNum, parametersNum])
-    torch.Size([targetDays, stocksNum])
-    trainDays 与 targetDays可使用 setLength 函数更改
+    targetData.shape = torch.Size([targetDays, stocksNum]) 均为收盘价
+    trainDays 与 targetDays 可使用 setLength 函数更改
 
     isel 函数：对数据进行切片，需要输入切片的开始和结束索引，以及进行切片操作的维度
     """
 
-    def __init__(self, data: xr.DataArray = None, dataSetPath: str = None,
+    def __init__(self, data: xr.DataArray = None, dataPath: str = None,
                  trainDays: int = 360, targetDays: int = 30,
+                 isel: List[int] = None,  # [start_index, end_index]
                  device=None):
         self.device = device  # 自动将tensor转移device，device==None则不转移(默认使用CPU)
         self.data: xr.DataArray = xr.DataArray([])
+
         if data is not None:
             self.data = data
-        elif dataSetPath is not None:
-            self.data = xr.load_dataarray(dataSetPath)
+        elif dataPath is not None:
+            self.data = xr.load_dataarray(dataPath)
         else:
             raise "data not found"
+
+        self.indexList = [i for i in range(len(self.data.Date))]  # 不知道怎么从xr.DataArray中获取一段时间的切片，用这种方法代替
+        if isel is not None:
+            if isel[0] < 0:
+                isel[0] = 0
+            if isel[1] > len(self.data.Date):
+                isel[1] = len(self.data.Date)
+            self.data = self.data.isel(Date=self.indexList[isel[0]:isel[1]])  # 左闭右开
+
         self.data.load()
         self.data = self.data.astype(np.float32)
-        self.indexList = [i for i in range(len(self.data.Date))]  # 不知道怎么从xr.DataArray中获取一段时间的切片，用这种方法代替
         self.trainDays: int = trainDays
         self.targetDays: int = targetDays
 
@@ -39,10 +55,10 @@ class DataSet:
         or         trainDataSet = dataSet.sel(index=[0: 3000], inplace=False)
         """
         if inplace:
-            eval("self.data = self.data.isel(" + dim + "=self.indexList[startIndex: endIndex])")
-            return self.data
+            self.data = eval("self.data.isel(" + dim + "=self.indexList[startIndex: endIndex])")  # 有bug
+            return self
         else:
-            return eval("self.data.isel(" + dim + "=self.indexList[startIndex: endIndex])")
+            return DataSet(eval("self.data.isel(" + dim + "=self.indexList[startIndex: endIndex])"))
 
     def setLength(self, trainDays, targetDays):
         self.trainDays = trainDays
