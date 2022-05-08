@@ -3,9 +3,11 @@ import torch
 import torch.nn as nn
 import torch.functional as F
 import torch.optim as optim
+import xarray as xr
 # import d2l.torch as d2l
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 from collections import OrderedDict
+from tqdm import tqdm
 
 
 class Reshape(nn.Module):
@@ -22,6 +24,15 @@ class Reshape(nn.Module):
         # if self.shape[0] < x.shape[0]:
         #     shape[0] = x.shape[0]
         return x.view(self.shape)
+
+
+class Permute(nn.Module):
+    def __init__(self, *dims):
+        super(Permute, self).__init__()
+        self.dims = dims
+
+    def forward(self, x):
+        return x.permute(self.dims)
 
 
 def device():

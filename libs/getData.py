@@ -108,33 +108,35 @@ class DownloadData(DownloadDataInterface):
 
     def storeStockList(self):
         # ToDo(Alex Han) 需要加入自动找1440支股票的功能(downloadStartDate的股票列表与剔除ST股的最新股票列表的交集大于等于1440)， 需要支持传入股票池
-        self.wait()
-        # 可使用 pro.stock_basic(fields=["ts_code"]) 获取最新所有股票的列表，但是未来股票数量会超过单次数据调取上限
-        latestStockList = pd.concat([self.pro.stock_basic(**{"exchange": "SZSE"}, fields=["ts_code", "name"]),
-                                     self.pro.stock_basic(**{"exchange": "SSE"}, fields=["ts_code", "name"])],
-                                    ignore_index=True)  # 最近交易日股票列表
+        if self.stockList.empty:
+            self.wait()
+            # 可使用 pro.stock_basic(fields=["ts_code"]) 获取最新所有股票的列表，但是未来股票数量会超过单次数据调取上限
+            latestStockList = pd.concat([self.pro.stock_basic(**{"exchange": "SZSE"}, fields=["ts_code", "name"]),
+                                         self.pro.stock_basic(**{"exchange": "SSE"}, fields=["ts_code", "name"])],
+                                        ignore_index=True)  # 最近交易日股票列表
 
-        # 删去ST股
-        latestStockList = latestStockList[~latestStockList.name.str.contains('ST')].reset_index(drop=True)
+            # 删去ST股
+            latestStockList = latestStockList[~latestStockList.name.str.contains('ST')].reset_index(drop=True)
 
-        latestStockList = pd.DataFrame(latestStockList["ts_code"])
+            latestStockList = pd.DataFrame(latestStockList["ts_code"])
 
-        self.wait()
-        daily = self.pro.daily(**{"trade_date": self.downloadStartDate}, fields=["ts_code"])
-        # 最后一个与最近交易日共有1440支股票的日期是20091208
+            self.wait()
+            daily = self.pro.daily(**{"trade_date": self.downloadStartDate}, fields=["ts_code"])
+            # 最后一个与最近交易日共有1440支股票的日期是20091208
 
-        # self.wait()
-        # dailyStart = self.pro.daily(**{"trade_date": self.startDate}, fields=["ts_code"])
-        # # 训练数据开始日的股票列表
+            # self.wait()
+            # dailyStart = self.pro.daily(**{"trade_date": self.startDate}, fields=["ts_code"])
+            # # 训练数据开始日的股票列表
 
-        # 取开始日期的股票列表与开始日、最近交易日股票列表的交集
-        stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")["ts_code"]  # type(stockList) = pd.Series
-        # stockList = pd.merge(stockList, dailyStart["ts_code"], how="inner")["ts_code"]
-        stockList = stockList.sort_values()
-        stockList = stockList.reset_index(drop=True)
+            # 取开始日期的股票列表与开始日、最近交易日股票列表的交集
+            stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")[
+                "ts_code"]  # type(stockList) = pd.Series
+            # stockList = pd.merge(stockList, dailyStart["ts_code"], how="inner")["ts_code"]
+            stockList = stockList.sort_values()
+            stockList = stockList.reset_index(drop=True)
+            self.stockList = stockList
 
-        storeAsCsv(stockList, join(self.basicDataStoreFolder, "stockList.csv"))
-        self.stockList = stockList
+        storeAsCsv(self.stockList, join(self.basicDataStoreFolder, "stockList.csv"))
 
     def setStockList(self, stockListPath: str):
         """读取csv文件，从columns中选取‘ts_code’列"""
@@ -161,7 +163,7 @@ class DownloadData(DownloadDataInterface):
         log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
 
         tradeCal = []
-        if int(log["stock_num"]) != len(self.stockList):
+        if int(log["stockNum"]) != len(self.stockList):
             # 股票数量改变，则每天的数据都需要重新下载
             tradeCal = self.tradeCal
         else:

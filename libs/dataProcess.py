@@ -11,6 +11,7 @@ import json
 # ToDo(Alex Han) 在完成因子下载函数后将因子与行情数据合并
 # ToDo(Alex Han) 从行情数据中获得股票数量最多或最少的日数据的股票列表作为筛选用的股票列表，将数据处理从数据下载中抽取出来
 
+
 # class DataProcessLog:
 #     """
 #     DataProcess类的Log类，能够记录DataProcess的数据读取、输出路径，并记录DataProcess的操作
@@ -75,6 +76,7 @@ class DataProcess:
         for date in tqdm(self.tradeCal, desc="Load daily data"):
             data = pd.read_csv(join(self.rawMarketDataPath, str(date) + ".csv"))
             dailyData.append(data.values)
+        print("np.array(dailyData) : ", np.array(dailyData).shape)
         return np.array(dailyData)  # shape = [date, stock, parameters]
 
     def loadData(self):

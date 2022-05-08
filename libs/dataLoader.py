@@ -12,6 +12,14 @@ def DataLength(dataPath):
     return len(data)
 
 
+def findSameNum(target, check_list: list):
+    times = 0
+    for item in check_list:
+        if item == target:
+            times += 1
+    return times
+
+
 class DataSet:
     r"""
     生成滑动窗口数据，每步返回两个值: trainData 和 targetData
@@ -43,6 +51,7 @@ class DataSet:
             if isel[1] > len(self.data.Date):
                 isel[1] = len(self.data.Date)
             self.data = self.data.isel(Date=self.indexList[isel[0]:isel[1]])  # 左闭右开
+        self.isel_index = isel
 
         self.data.load()
         self.data = self.data.astype(np.float32)
@@ -64,6 +73,9 @@ class DataSet:
         self.trainDays = trainDays
         self.targetDays = targetDays
 
+    def to_device(self, device: torch.device):
+        self.device = device
+
     def getTrainData(self, item: int):
         r"""
         data.nc中获取的是[-1, 1440, 10]的数据，需要转换为[-1, 120, 120]的数据
@@ -80,20 +92,28 @@ class DataSet:
         else:
             return torch.Tensor(self.data.isel(Date=self.indexList[item: item + self.trainDays]).values).to(self.device)
 
-    def getTargetData(self, item: int):
+    def getTargetData(self, item: int, Parameter: str = "close"):
         r"""
-        :return: torch.Size([targetDays, stocksNum]) like torch.Size([30, 1570])
+        :return: torch.Size([targetDays, stocksNum]) like torch.Size([30, 1440])
         """
+        target_data = torch.Tensor(self.data
+                                   .isel(
+                                    Date=self.indexList[item + self.trainDays: item + self.trainDays + self.targetDays])
+                                   .sel(Parameter=Parameter)
+                                   .values)
+        times = findSameNum(target=Parameter, check_list=list(self.data.coords["Parameter"].data))
+        if times == 0:
+            raise "Parameter Error, can't find " + "'" + Parameter + "'" + " in " \
+                  + str(list(self.data.coords["Parameter"].data))
+        elif times > 1:
+            print("WARNING : Find " + str(times) + " '" + Parameter + "' in data")
+            target_data = target_data[:, :, 1]
+            target_data = target_data.squeeze(dim=-1)
+
         if self.device is None:
-            return torch.Tensor(self.data
-                                .isel(Date=self.indexList[item + self.trainDays: item + self.trainDays + self.targetDays])
-                                .sel(Parameter="close")
-                                .values)
+            return target_data
         else:
-            return torch.Tensor(self.data
-                                .isel(Date=self.indexList[item + self.trainDays: item + self.trainDays + self.targetDays])
-                                .sel(Parameter="close")
-                                .values).to(self.device)
+            return target_data.to(self.device)
 
     def __getitem__(self, item):
         return self.getTrainData(item), self.getTargetData(item)
@@ -103,10 +123,17 @@ class DataSet:
 
 
 class DataLoader:
-    def __init__(self, dataSet: DataSet):
+    def __init__(self, dataSet: DataSet, device: torch.device = None):
+        self.device = device
         self.dataSet: DataSet = dataSet
+        if device is not None:
+            self.dataSet.to_device(device)
         self.shifter: int = -1
         self.len = len(self.dataSet) - (self.dataSet.trainDays + self.dataSet.targetDays) + 1
+
+    def to_device(self, device: torch.device):
+        self.device = device
+        self.dataSet.to_device(device)
 
     def __len__(self):
         return self.len
