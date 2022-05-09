@@ -106,7 +106,7 @@ class DataSet:
             raise "Parameter Error, can't find " + "'" + Parameter + "'" + " in " \
                   + str(list(self.data.coords["Parameter"].data))
         elif times > 1:
-            print("WARNING : Find " + str(times) + " '" + Parameter + "' in data")
+            print("WARNING : Found " + str(times) + " '" + Parameter + "' in data")
             target_data = target_data[:, :, 1]
             target_data = target_data.squeeze(dim=-1)
 
