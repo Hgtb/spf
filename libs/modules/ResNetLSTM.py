@@ -1,5 +1,5 @@
 from libs.modules.includes import *
-from libs.modules.thirdPart import AdditiveAttention, dilate_loss
+from libs.modules.thirdPart import AdditiveAttention, dilate_loss, MyTimer
 from libs.dataLoader import DataLoader
 
 """
@@ -92,80 +92,117 @@ class BottleneckBlock(nn.Module):
         residual = x
         out = self.conv3(self.conv2(self.conv1(x)))
 
-        # print("out : ", out.shape)
         if self.downsample is not None:
-            # print("Do downsample!")
             residual = self.downsample(residual)
-            # print("downsample : ", residual.shape)
 
         out = out + residual
         out = self.ReLU(out)
         return out
 
 
-class Conv2X(nn.Module):
-    def __init__(self):
-        super(Conv2X, self).__init__()
-        self.convBlock0 = BottleneckBlock(in_channels=64, hidden_channels=64, out_channels=256)
-        self.convBlock1 = BottleneckBlock(in_channels=256, hidden_channels=64, out_channels=256)
-        self.convBlock2 = BottleneckBlock(in_channels=256, hidden_channels=64, out_channels=256)
+class Conv1X(nn.Module):
+    def __init__(self, use_checkpoint):
+        super(Conv1X, self).__init__()
+        self.use_checkpoint = use_checkpoint
+        self.convBlock = nn.Sequential(  # 1*120*120 -> 64*116*116 -> 64*112*112 -> 64*56*565
+            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
+            nn.ReLU(),
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
 
     def forward(self, x):
-        x = self.convBlock0(x)
-        x = self.convBlock1(x)
-        x = self.convBlock2(x)
-        return x
+        # print("Conv1X : ")
+        # print("conv1 : ", self.convBlock[0].state_dict())
+        # print("conv2 : ", self.convBlock[3].state_dict())
+        if self.use_checkpoint:
+            x = checkpoint_sequential(self.convBlock, 2, x)
+            # print("Conv1X DONE")
+            return x
+        else:
+            x = self.convBlock(x)
+            return x
+
+
+class Conv2X(nn.Module):
+    def __init__(self, use_checkpoint):
+        super(Conv2X, self).__init__()
+        self.use_checkpoint = use_checkpoint
+        self.convBlock = nn.Sequential(
+            BottleneckBlock(in_channels=64, hidden_channels=64, out_channels=256),
+            BottleneckBlock(in_channels=256, hidden_channels=64, out_channels=256),
+            # BottleneckBlock(in_channels=256, hidden_channels=64, out_channels=256)
+        )
+
+    def forward(self, x):
+        if self.use_checkpoint:
+            x = checkpoint_sequential(self.convBlock, 2, x)
+            return x
+        else:
+            x = self.convBlock(x)
+            return x
 
 
 class Conv3X(nn.Module):
-    def __init__(self):
+    def __init__(self, use_checkpoint):
         super(Conv3X, self).__init__()
-        self.convBlock0 = BottleneckBlock(in_channels=256, hidden_channels=128, out_channels=512,
-                                          stride=2)  # maxPooling or AvgPooling
-        self.convBlock1 = BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512)
-        self.convBlock2 = BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512)
-        self.convBlock3 = BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512)
+        self.use_checkpoint = use_checkpoint
+        self.convBlock = nn.Sequential(
+            BottleneckBlock(in_channels=256, hidden_channels=128, out_channels=512, stride=2),
+            BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512),
+            # BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512),
+            # BottleneckBlock(in_channels=512, hidden_channels=128, out_channels=512)
+        )
 
     def forward(self, x):
-        x = self.convBlock0(x)
-        x = self.convBlock1(x)
-        x = self.convBlock2(x)
-        x = self.convBlock3(x)
-        return x
+        if self.use_checkpoint:
+            x = checkpoint_sequential(self.convBlock, 2, x)
+            return x
+        else:
+            x = self.convBlock(x)
+            return x
 
 
 class Conv4X(nn.Module):
-    def __init__(self):
+    def __init__(self, use_checkpoint):
         super(Conv4X, self).__init__()
-        self.convBlock0 = BottleneckBlock(in_channels=512, hidden_channels=256, out_channels=1024, stride=2)
-        self.convBlock1 = BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
-        self.convBlock2 = BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
-        self.convBlock3 = BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
-        self.convBlock4 = BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
-        self.convBlock5 = BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
+        self.use_checkpoint = use_checkpoint
+        self.convBlock = nn.Sequential(
+            BottleneckBlock(in_channels=512, hidden_channels=256, out_channels=1024, stride=2),
+            BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024),
+            # BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024),
+            # BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024),
+            # BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024),
+            # BottleneckBlock(in_channels=1024, hidden_channels=256, out_channels=1024)
+        )
 
     def forward(self, x):
-        x = self.convBlock0(x)
-        x = self.convBlock1(x)
-        x = self.convBlock2(x)
-        x = self.convBlock3(x)
-        x = self.convBlock4(x)
-        x = self.convBlock5(x)
-        return x
+        if self.use_checkpoint:
+            x = checkpoint_sequential(self.convBlock, 2, x)
+            return x
+        else:
+            x = self.convBlock(x)
+            return x
 
 
 class Conv5X(nn.Module):
-    def __init__(self):
+    def __init__(self, use_checkpoint):
         super(Conv5X, self).__init__()
-        self.convBlock0 = BottleneckBlock(in_channels=1024, hidden_channels=512, out_channels=2048, stride=2)
-        self.convBlock1 = BottleneckBlock(in_channels=2048, hidden_channels=512, out_channels=2048)
-        self.convBlock2 = BottleneckBlock(in_channels=2048, hidden_channels=512, out_channels=2048)
+        self.use_checkpoint = use_checkpoint
+        self.convBlock = nn.Sequential(
+            BottleneckBlock(in_channels=1024, hidden_channels=512, out_channels=2048, stride=2),
+            BottleneckBlock(in_channels=2048, hidden_channels=512, out_channels=2048),
+            # BottleneckBlock(in_channels=2048, hidden_channels=512, out_channels=2048)
+        )
 
     def forward(self, x):
-        x = self.convBlock0(x)
-        x = self.convBlock1(x)
-        x = self.convBlock2(x)
-        return x
+        if self.use_checkpoint:
+            x = checkpoint_sequential(self.convBlock, 2, x)
+            return x
+        else:
+            x = self.convBlock(x)
+            return x
 
 
 # ToDo(Alex Han) 添加自动网络生成模块，根据传入参数自动生成四个动态网络模块(conv2_x, conv3_x, conv4_x, conv5_x)
@@ -177,42 +214,31 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.use_checkpoint = use_checkpoint
         self.layer_nums = layer_nums
-        self.conv1_x = nn.Sequential(  # 1*120*120 -> 64*116*116 -> 64*112*112 -> 64*56*56
-            nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
-        )
-        self.conv2_x = Conv2X()
-        self.conv3_x = Conv3X()
-        self.conv4_x = Conv4X()
-        self.conv5_x = Conv5X()
+        self.conv1_x = Conv1X(use_checkpoint=use_checkpoint)
+        self.conv2_x = Conv2X(use_checkpoint=use_checkpoint)
+        self.conv3_x = Conv3X(use_checkpoint=use_checkpoint)
+        self.conv4_x = Conv4X(use_checkpoint=use_checkpoint)
+        self.conv5_x = Conv5X(use_checkpoint=use_checkpoint)
         self.avgPool = nn.AvgPool2d(kernel_size=7, stride=1)
 
     def forward(self, x):
         # x : torch.Size([360, 1, 120, 120])
-        if self.use_checkpoint:
-            # 使用checkpoint和checkpoint_sequential降低显存占用
-            x = checkpoint_sequential(self.conv1_x, 2, x)
-            x = checkpoint(self.conv2_x, x)
-            x = checkpoint(self.conv3_x, x)
-            x = checkpoint(self.conv4_x, x)
-            x = checkpoint(self.conv5_x, x)  # [360, 2048, 7, 7]
-            x = checkpoint(self.avgPool, x)  # [360, 2048, 1, 1]
-            # x : torch.Size([360, 2048, 1, 1])
-            return x
-        else:
-            x = self.conv1_x(x)
-            x = self.conv2_x(x)
-            x = self.conv3_x(x)
-            x = self.conv4_x(x)
-            x = self.conv5_x(x)
-            x = self.avgPool(x)
-            # x : torch.Size([360, 2048, 1, 1])
-            return x
+        # print("ResNet : ")
+        x = self.conv1_x(x)
+        # print("conv1_x : ", x[0])
+        x = self.conv2_x(x)
+        # print("conv1_x : ", x[0])
+        x = self.conv3_x(x)
+        # print("conv1_x : ", x[0])
+        x = self.conv4_x(x)
+        # print("conv1_x : ", x[0])
+        x = self.conv5_x(x)
+        # print("conv1_x : ", x[0])
+        x = self.avgPool(x)
+        # print("avgPool : ", x[0])
+        # print("ResNet DONE")
+        # x : torch.Size([360, 2048, 1, 1])
+        return x
 
 
 class Seq2SeqEncoder(nn.Module):
@@ -225,8 +251,8 @@ class Seq2SeqEncoder(nn.Module):
         # x : torch.Size([360, 1, 2048])
         x = self.embedding(x)
         out, hidden_state = self.gru(x)
-        print(out.shape)
-        print(hidden_state.shape)
+        # print(out.shape)
+        # print(hidden_state.shape)
         return out, hidden_state
 
 
@@ -264,28 +290,40 @@ class Seq2SeqAttentionDecoder(nn.Module):
         outputs, hidden_state = enc_outputs
         return outputs.permute(1, 0, 2), hidden_state, enc_valid_lens
 
-    def forward(self, decoder_input, decoder_state):
-        print("Seq2Seq&Attention Decoder Input : ", decoder_input.shape)
+    def forward(self, decoder_inputs, decoder_state):
+        # print("Seq2Seq&Attention Decoder Input : ", decoder_inputs.shape)
         enc_outputs, hidden_state, enc_valid_lens = decoder_state
-        decoder_input = self.embedding(decoder_input)
+        decoder_inputs = self.embedding(decoder_inputs)
         outputs, self._attention_weights = [], []
-        for x in decoder_input:
+        for decoder_input in decoder_inputs:
+            decoder_input = decoder_input.reshape(1, 1, -1)  # [2048] -> [1, 1, 2048]
             query = torch.unsqueeze(hidden_state[-1], dim=1)
             context = self.attention(query, enc_outputs, enc_outputs, enc_valid_lens)  # bahdanau attention
             # print("context : ", context.shape)
-            # print("torch.unsqueeze(x, dim=1) : ", torch.unsqueeze(x, dim=1).shape)
-            x = torch.cat([context, torch.unsqueeze(x, dim=1)], dim=-1)
-            # print("x : ", x.shape)
-            # print("x.permute(1, 0, 2) : ", x.permute(1, 0, 2).shape)
-            out, hidden_state = self.gru(x.permute(1, 0, 2), hidden_state)
+            # print("decoder_input : ", decoder_input.shape)
+            # print("torch.unsqueeze(decoder_input, dim=1) : ", torch.unsqueeze(decoder_input, dim=1).shape)
+            decoder_input = torch.cat([context, decoder_input], dim=-1)
+            # print("x : ", decoder_input.shape)
+            # print("x.permute(1, 0, 2) : ", decoder_input.permute(1, 0, 2).shape)
+            out, hidden_state = self.gru(decoder_input.permute(1, 0, 2), hidden_state)
+            # print("out : ", out.shape)
             outputs.append(out)
-            self._attention_weights.append(self.attention.attention_weights)
-        print("Seq2Seq&Attention Decoder Output : ", torch.cat(outputs, dim=0).shape)
-        return torch.cat(outputs, dim=0), [enc_outputs, hidden_state, enc_valid_lens]
+            with torch.no_grad():
+                # self.attention.attention_weights : torch.Tensor
+                # self.attention.attention_weights.shape : torch.Size([1, 1, 360])
+                self._attention_weights.append(self.attention.attention_weights)
+        self._attention_weights = torch.cat(self._attention_weights, dim=0).cpu()  # 30*[1, 1, 360] -> [30, 1, 360]
+        # outputs: list -> torch.Tensor
+        # [torch.Size([1, 1, 2048]), torch.Size([1, 1, 2048]), ...] -> torch.Size([30, 1, 2048])
+        return torch.cat(outputs, dim=0), self._attention_weights, [enc_outputs, hidden_state, enc_valid_lens]
 
     @property
     def attention_weights(self):
         return self._attention_weights
+
+    def clean_attention_weights(self):
+        self._attention_weights = []
+        torch.cuda.empty_cache()
 
 
 class Seq2SeqAttention(nn.Module):
@@ -314,151 +352,257 @@ class ResNetSeq2SeqAttention(nn.Module):
                  resNet_layer_nums: list,
                  seq2seq_hidden_size: int,
                  seq2seq_num_layer: int,  # The num_layer of the GRU in the encoder and decoder
-                 output_size: int,
+                 output_size: int,  # word_vector_size or prediction_parameter_num
                  use_checkpoint=False):
         super(ResNetSeq2SeqAttention, self).__init__()
+        # ResNet half precision(float16) to reduce GPU memory usage, ResNet's output should convert to float32.
         self.ResNet = ResNet(layer_nums=resNet_layer_nums, use_checkpoint=use_checkpoint)
+        # self.ResNet = ResNet(layer_nums=resNet_layer_nums, use_checkpoint=use_checkpoint).half()
         self.encoder = Seq2SeqEncoder(input_size=2048, hidden_size=seq2seq_hidden_size,
                                       num_layers=seq2seq_num_layer, dropout=0.1)
-        self.decoder = Seq2SeqAttentionDecoder(input_size=seq2seq_hidden_size, hidden_size=seq2seq_hidden_size,
+        self.decoder = Seq2SeqAttentionDecoder(input_size=output_size, hidden_size=seq2seq_hidden_size,
                                                num_layers=seq2seq_num_layer, dropout=0.1)
 
         # The encoder and the decoder share the dense for decoding([*, 2048] -> [*, 1440]).
         self.dense = nn.Linear(in_features=seq2seq_hidden_size, out_features=output_size)
 
-    def forward(self, x: torch.Tensor, teacher_data: torch.Tensor = None):  # Train Module
+    def forward(self, x: torch.Tensor, teacher_data: torch.Tensor = None, steps: int = None):  # Train Module
+        """
+        It can automatically select the operating mode of the decoder
+        :param x: History data
+        :param teacher_data: The data used in teacher forcing, the length of `teacher_data` is the prediction steps
+        :param steps: The prediction steps in evaluate_module
+        :return: module output data, shape is torch.Tensor([len(teacher_data) or steps, 1 output_size])
+        """
         if x.shape != torch.Size([360, 1, 120, 120]):
-            raise f"Module input shape error.Expect torch.Size([360, 1, 120, 120]), got {x.shape}."
-        if (self.model == "train") & (teacher_data is None):
+            raise f"Module input shape error.Expect torch.Size([360, 1, 120, 120]), got {str(x.shape)}."
+        if self.training & (teacher_data is None):
             raise "The mode of the model is training, but the parameter 'teacher_data' is not passed in."
+        if (not self.training) & (steps is None):
+            raise "The mode of the model is evaluating, but the parameter 'steps' is not passed in."
 
         if self.training:
             return self.train_module(x, teacher_data)
         else:
-            return self.evaluate_module(x)
+            return self.evaluate_module(x, steps)
 
     def train_module(self, x: torch.Tensor, target_data: torch.Tensor):
         """Use teacher forcing mechanism"""
         assert x.shape == torch.Size([360, 1, 120, 120])
-        x.requires_grad = True
-        target_data.requires_grad = True
+        # x.requires_grad = True
+        # target_data.requires_grad = True
 
+        # print("train_module : ")
+
+        # x = x.half()  # Convert input from float32 to float16.
+        # print("x : ", x[0])
+        # res_output.shape : torch.Size([360, 2048, 1, 1])
         res_output = self.ResNet(x)
+        # res_output = torch.rand(360, 2048, 1, 1)
+        # res_output.requires_grad = True
         del x
+
+        # res_output.shape : torch.Size([360, 1, 2048])
+        res_output = res_output.reshape(360, 1, 2048)
+        # res_output = res_output.reshape(360, 1, 2048).float()
+        # print("res_output : ", res_output)
+
+        # enc_output.shape : torch.Size([360, 1, 2048])
+        enc_output, enc_state = self.encoder(res_output)
+        # print("enc_output : ", enc_output[0])
+        del res_output
+
+        # dec_inputs.shape : torch.Size([30, 1440])
+        dec_inputs = torch.cat([self.dense(enc_output[-1]), target_data[1:]], dim=0)
+        # print("dec_inputs : ", dec_inputs)
+
+        dec_state = self.decoder.init_state(enc_outputs=(enc_output, enc_state))
+
+        # dec_output.shape : torch.Size([30, 1, 2048])
+        dec_output, _, dec_state = self.decoder(decoder_inputs=dec_inputs, decoder_state=dec_state)
+        # print("dec_output : ", dec_output[0])
+        self.decoder.clean_attention_weights()
+
+        # model_output.shape : torch.Size([30, 1, 1440])
+        model_output = self.dense(dec_output)
+        # print("model_output : ", model_output[0])
+        del dec_output
+        # print("train_module DONE")
+        return model_output, dec_state
+
+    def evaluate_module(self, x: torch.Tensor, steps: int):
+        assert x.shape == torch.Size([360, 1, 120, 120])
+        attention_weights = []  # Store attention_weights in every step
+        x.requires_grad = False
+
+        # res_output.shape : torch.Size([360, 2048, 1, 1])
+        res_output = self.ResNet(x)
+        # res_output = torch.rand(360, 2048, 1, 1)
+        # res_output.requires_grad = False
+        del x
+
+        # res_output.shape : torch.Size([360, 1, 2048])     dtype : float16 -> float32
+        res_output = res_output.reshape(360, 1, 2048).float()
+
+        # enc_output.shape : torch.Size([360, 1, 2048])
         enc_output, enc_state = self.encoder(res_output)
         del res_output
-        dec_input = torch.cat([self.dense(enc_output[-1]), target_data[1:]], dim=0)
+
+        # dec_input.shape : torch.Size([1, 1, 2048])
+        dec_input = self.dense(enc_output[-1])
+        dec_outputs = []
         dec_state = self.decoder.init_state(enc_outputs=(enc_output, enc_state))
-        print("dec_input : ", dec_input.shape)
-        dec_output, dec_state = self.decoder(decoder_input=dec_input, state=dec_state)
-        print("dec_output : ", dec_output.shape)
-        model_output = self.dense(dec_output)
-        print("model_output : ", model_output.shape)
-        return model_output
 
-    def evaluate_module(self, x: torch.Tensor):
-        assert x.shape == torch.Size([360, 1, 120, 120])
+        # print("dec_input : ", dec_input.shape)
 
-        return x
+        for step in range(steps):
+            dec_output, attention_weight, dec_state = self.decoder(dec_input, dec_state)
+            # print("dec_output", dec_output.shape)
+            dec_input = self.dense(dec_output)
+            dec_outputs.append(dec_input)
+            # print("dec_outputs", len(dec_outputs))
+
+            attention_weights.append(self.decoder.attention_weights)
+            self.decoder.clean_attention_weights()
+
+        model_output = torch.cat(dec_outputs, dim=0)
+        # print("model_output: ", dec_outputs.shape)
+
+        # model_output.shape : torch.Size([30, 1, 1440])
+        del dec_outputs
+        torch.cuda.empty_cache()
+
+        # print("self.decoder.attention_weights[0] : ", self.decoder.attention_weights[0].shape)
+        # model_output : tensor.Size([30, 1, 1440])
+        # attention_weights : list[list[list[torch.Size([])]]]
+        return model_output, attention_weights, dec_state
 
 
-def train_ResNetSeq2SeqAttention(module: ResNetSeq2SeqAttention, dataLoader: DataLoader, learning_rate: float,
+def train_ResNetSeq2SeqAttention(model: ResNetSeq2SeqAttention,
+                                 dataLoader: DataLoader, init_weights: bool,
+                                 learning_rate: float,
                                  num_epoch: int,
-                                 alpha: float, gamma: float, Device: torch.device):
+                                 alpha: float,
+                                 gamma: float,
+                                 device: torch.device):
     def xavier_init_weights(m):
+        # ToDo(Alex Han) 添加 BatchNormal2d 和 Conv2d 的初始化
         if type(m) == nn.Linear:
             nn.init.xavier_uniform_(m.weight)
+        # if type(m) == nn.Conv2d:
+        #     nn.init.xavier_uniform_(m.weight, )
         if type(m) == nn.GRU:
             for param in m._flat_weights_names:
                 if "weight" in param:
                     nn.init.xavier_uniform_(m._parameters[param])
 
-    module.apply(xavier_init_weights)
-    module.to(Device)
-    dataLoader.to_device(Device)
-    optimizer = torch.optim.Adam(module.parameters(), lr=learning_rate)  # 需要更换
-    loss = dilate_loss
-    module.train()
+    loss_file = open("../StockPriceForecast/loss.csv", "a")
+    loss_file.write("loss\r\n")
+
+    model.apply(xavier_init_weights)
+    model.train()
+    torch.cuda.empty_cache()
+    model.to(device)
+    dataLoader.to_device(device)
+
+    attention_weight_seq = []
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    # loss_func = dilate_loss  # dilate_loss 计算为负值
+    loss_func = nn.MSELoss()
+    Loss = []
+    # Loss_shape = []
+    # Loss_temporal = []
     for epoch in range(num_epoch):
-        # timer
+        torch.cuda.empty_cache()
+        timer = MyTimer()
         # draw loss
-        for train_data, target_data in dataLoader:
+        for train_data, target_data in tqdm(dataLoader):
+            torch.cuda.empty_cache()
             train_data = train_data.reshape(360, 1, 120, 120)
             train_data.requires_grad = True
             target_data.requires_grad = True
+            train_data = train_data
+            target_data = target_data
             optimizer.zero_grad()
 
-            # ResNet_output : torch.Size([360, 2048, 1, 1])
-            ResNet_output = module.ResNet(train_data)
+            # model_output : torch.Size([30, 1, 1440])
+            model_output, _ = model(train_data, target_data)
 
-            # encoder_input : torch.Size([360, 1, 2048])
-            encoder_input = ResNet_output.squeeze(dim=3).squeeze(dim=2).unsqueeze(dim=1)
+            model_output = model_output.permute(2, 0, 1)  # [30, 1, 1440] -> [1440, 30, 1]
+            target_data = torch.unsqueeze(target_data, dim=-1)  # [30, 1440] -> [30, 1440, 1]
+            target_data = target_data.permute(1, 0, 2)  # [30, 1440, 1] -> [1440, 30, 1]
 
-            print("encoder_input", encoder_input.shape)
-            # encoder_input : torch.Size([360, 1, 2048])
-            # encoder_output.shape = torch.Size([360, 1, 2048])
-            # encoder_hidden_state.shape = torch.Size([2, 1, 2048])
-            encoder_output, encoder_hidden_state = module.Seq2Seq.encoder(encoder_input)
+            # loss, loss_shape, loss_temporal = loss_func(outputs=model_output, targets=target_data, alpha=alpha,
+            #                                             gamma=gamma, device=device)
+            loss = loss_func(model_output, target_data)
 
-            # decoder_input =
-            print("encoder_output[-1].unsqueeze(dim=0)", encoder_output[-1].shape)
-            print("target_data : ", target_data.shape)
-            print("target_data[1:].unsqueeze(dim=0)", target_data[1:].unsqueeze(dim=0).shape)
-            print("module.Seq2Seq.dense(encoder_output[-1].unsqueeze(dim=0))",
-                  module.Seq2Seq.dense(encoder_output[-1].unsqueeze(dim=0)).shape)
-            decoder_input = torch.cat(
-                [module.Seq2Seq.dense(encoder_output[-1].unsqueeze(dim=0)), target_data[1:].unsqueeze(dim=0)], dim=1)
-            print("decoder_input : ", decoder_input.shape)
-            # decoder_input.unsqueeze(dim=0)
-            # print("decoder_input.unsqueeze(dim=0) : ", decoder_input.shape)
+            loss.backward()
+            optimizer.step()
 
-            decoder_state = module.Seq2Seq.decoder.init_state(enc_outputs=(encoder_output, encoder_hidden_state))
-            decoder_output, decoder_state = module.Seq2Seq.decoder(decoder_input, decoder_state)
-            print("decoder_output : ", decoder_output.shape)
+            Loss.append(loss.sum().cpu().detach())
+            # Loss_shape.append(loss_shape.sum().cpu())
+            # Loss_temporal.append(loss_temporal.sum().cpu())
+            # loss_file.write(str(loss.cpu().detach().numpy()[0]))
 
-            Y_hat = module.Seq2Seq.dense(decoder_output)
-            print("Y_hat", Y_hat.shape)
+            print("loss : ", loss.cpu())
+            # print("loss_shape : ", loss_shape.cpu())
+            # print("loss_temporal : ", loss_temporal.cpu())
+            #
+            # del loss, loss_shape, loss_temporal
+            del loss
+            torch.cuda.empty_cache()
 
-            target_data = target_data.permute(1, 0).unsqueeze(dim=-1)
-            print(target_data.shape)
-
-            return
-    return
+        print(f"latest loss {Loss[-1]}, cost {timer.stop()} sec on {str(device)}")
+    return model, attention_weight_seq, Loss
 
 
-def predict_ResNetSeq2Seq(module: torch.nn.Module, dataLoader: DataLoader, steps: int, Device: torch.device,
+def predict_ResNetSeq2Seq(model: ResNetSeq2SeqAttention,
+                          dataLoader: DataLoader,
+                          steps: int,
+                          Device: torch.device,
+                          alpha: int,
+                          gamma: int,
                           save_attention_weights=False):
-    module.eval()
-    all_predict_seq = []  # len(all_predict_seq) = len(dataLoader)
-    all_attention_weight_seq = []  # len(all_attention_weight_seq) = len(dataLoader)
-    module.to(Device)
+    model.eval()
+    torch.no_grad()
+    predict_seq = []  # len(all_predict_seq) = len(dataLoader)
+    attention_weight_seq = []  # len(all_attention_weight_seq) = len(dataLoader)
+
+    model.to(Device)
     dataLoader.to_device(Device)
-    for input_X, target in tqdm(dataLoader):
-        predict_seq = []  # [torch.size([1440]), torch.size([1440]), ...]   len(predict_seq) = steps
-        attention_weight_seq = []  # len(predict_seq) = steps
-        input_X = input_X.reshape(360, 1, 120, 120)
-        ResNet_output = module.ResNet(input_X)
-        # print("ResNet_output", ResNet_output.shape)
-        encoder_input = ResNet_output.squeeze(dim=3).squeeze(dim=2).unsqueeze(dim=1)
-        encoder_output, encoder_hidden_state = module.Seq2Seq.encoder(encoder_input)
-        decoder_input = encoder_output[-1].unsqueeze(dim=0)
-        decoder_state = module.Seq2Seq.decoder.init_state(enc_outputs=(encoder_output, encoder_hidden_state))
-        for step in range(steps):
-            # decoder_input.shape = torch.Size([1, 1, 2048])
-            # Y.shape = torch.Size([1, 1, 2048])
-            Y, dec_state = module.Seq2Seq.decoder(decoder_input, decoder_state)
-            decoder_input = Y  # 用前一步的输出作为下一步的输入
-            #  output_Y.shape : torch.Size([1, 1, 1440])
-            pred = module.Seq2Seq.dense(Y)
-            predict_seq.append(pred.reshape(-1))
-            # print(pred.reshape(-1).shape)
-            if save_attention_weights:
-                attention_weight_seq.append(module.Seq2Seq.decoder.attention_weights)
-        print("torch.Tensor(predict_seq) : ", torch.Tensor(predict_seq))
-        all_predict_seq.append(torch.Tensor(predict_seq))
-        all_attention_weight_seq.append(attention_weight_seq)
-        return
-    return all_predict_seq, all_attention_weight_seq
+
+    # Calculate loss to evaluate model performance
+    loss_func = dilate_loss
+    Loss = []
+    Loss_shape = []
+    Loss_temporal = []
+
+    for model_inputs, target_data in tqdm(dataLoader):
+        model_inputs = model_inputs.reshape(360, 1, 120, 120)
+        model_output, attention_weight, _ = model(model_inputs)
+        del model_inputs
+
+        model_output = model_output.permute(2, 0, 1)  # [30, 1, 1440] -> [1440, 30, 1]
+        target_data = target_data.unsequeeze(dim=-1)  # [30, 1440] -> [30, 1440, 1]
+        target_data = target_data.permute(1, 0, 2)  # [30, 1440, 1] -> [1440, 30, 1]
+
+        # loss, loss_shape, loss_temporal = loss_func(outputs=model_output, targets=target_data, alpha=alpha,
+        #                                             gamma=gamma, device=Device)
+        loss = loss_func(model_output, target_data)
+        Loss.append(loss.sum().cpu())
+        # Loss_shape.append(loss_shape.sum().cpu())
+        # Loss_temporal.append(loss_temporal.sum().cpu())
+        # del loss, loss_shape, loss_temporal
+        del loss
+        torch.cuda.empty_cache()
+
+        model_output = torch.squeeze(model_output)  # [1440, 30, 1] -> [1440, 30]
+        predict_seq.append(model_output)
+        attention_weight_seq.append(attention_weight)
+        break
+    return predict_seq, attention_weight_seq, (Loss, Loss_shape, Loss_temporal)
 
 
 if __name__ == "__main__":
@@ -480,11 +624,3 @@ if __name__ == "__main__":
     #   使用数据集 > 6GB
     #   使用相同大小随机张量 > 6GB
     #   关闭梯度 2.1GB
-
-    encoder = Seq2SeqEncoder(input_size=2048, hidden_size=2048, num_layers=2, dropout=0.1)
-    decoder = Seq2SeqAttentionDecoder(hidden_size=2048, num_layers=2, dropout=0.1)
-    encoder.eval()
-    decoder.eval()
-
-    X = torch.rand(360, 1, 2048)
-    print("X : ", X.shape)

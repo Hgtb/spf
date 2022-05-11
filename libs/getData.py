@@ -129,8 +129,7 @@ class DownloadData(DownloadDataInterface):
             # # 训练数据开始日的股票列表
 
             # 取开始日期的股票列表与开始日、最近交易日股票列表的交集
-            stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")[
-                "ts_code"]  # type(stockList) = pd.Series
+            stockList = pd.merge(latestStockList, daily["ts_code"], how="inner")["ts_code"]  # type(stockList) = pd.Series
             # stockList = pd.merge(stockList, dailyStart["ts_code"], how="inner")["ts_code"]
             stockList = stockList.sort_values()
             stockList = stockList.reset_index(drop=True)

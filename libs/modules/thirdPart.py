@@ -1,11 +1,11 @@
-import torch.nn.functional
-# import d2l.torch as d2l
-from libs.modules.includes import *
+import time
 import torch
 import torch.nn as nn
+import torch.nn.functional
 import numpy as np
 from numba import jit
 from torch.autograd import Function
+from libs.modules.includes import *
 
 #  from d2l
 def sequence_mask(X, valid_len, value=0):
@@ -66,22 +66,55 @@ class AdditiveAttention(nn.Module):
         # one-dimensional entry from the shape. Shape of `scores`:
         # (`batch_size`, no. of queries, no. of key-value pairs)
         scores = self.w_v(features).squeeze(-1)
+
+        # del features
+        # torch.cuda.empty_cache()
+
         self.attention_weights = masked_softmax(scores, valid_lens)
         # Shape of `values`: (`batch_size`, no. of key-value pairs, value
         # dimension)
         return torch.bmm(self.dropout(self.attention_weights), values)
 
 
+class MyTimer:
+    """Record multiple running times."""
+    def __init__(self):
+        """Defined in :numref:`subsec_linear_model`"""
+        self.times = []
+        self.start()
+
+    def start(self):
+        """Start the timer."""
+        self.tik = time.time()
+
+    def stop(self):
+        """Stop the timer and record the time in a list."""
+        self.times.append(time.time() - self.tik)
+        return self.times[-1]
+
+    def avg(self):
+        """Return the average time."""
+        return sum(self.times) / len(self.times)
+
+    def sum(self):
+        """Return the sum of time."""
+        return sum(self.times)
+
+    def cumsum(self):
+        """Return the accumulated time."""
+        return np.array(self.times).cumsum().tolist()
+
+
 # From https://github.com/vincent-leguen/DILATE
 
 def pairwise_distances(x, y=None):
-    '''
+    """
     Input: x is a Nxd matrix
            y is an optional Mxd matirx
     Output: dist is a NxM matrix where dist[i,j] is the square norm between x[i,:] and y[j,:]
             if y is not given then use 'y=x'.
     i.e. dist[i,j] = ||x[i,:]-y[j,:]||^2
-    '''
+    """
     x_norm = (x ** 2).sum(1).view(-1, 1)
     if y is not None:
         y_t = torch.transpose(y, 0, 1)
@@ -306,6 +339,11 @@ class PathDTWBatch(Function):
 
 def dilate_loss(outputs, targets, alpha, gamma, device):
     # outputs, targets: shape (batch_size, N_output, 1)
+
+    # print("dilate_loss : ")
+    # print("outputs : ", outputs.reshape(1440, 30)[0])
+    # print("targets : ", targets.reshape(1440, 30)[0])
+
     batch_size, N_output = outputs.shape[0:2]
     loss_shape = 0
     softdtw_batch = SoftDTWBatch.apply
@@ -315,10 +353,21 @@ def dilate_loss(outputs, targets, alpha, gamma, device):
         D[k:k + 1, :, :] = Dk
     loss_shape = softdtw_batch(D, gamma)
 
+    # print("loss_shape : ", loss_shape)
+
     path_dtw = PathDTWBatch.apply
     path = path_dtw(D, gamma)
-    Omega = pairwise_distances(torch.range(1, N_output).view(N_output, 1)).to(device)
+
+    # print("path : ", path[0])
+
+    Omega = pairwise_distances(torch.arange(start=1, end=N_output + 1, dtype=torch.float32).view(N_output, 1)).to(device)
+    # Omega = pairwise_distances(torch.range(1, N_output).view(N_output, 1)).to(device)  # torch.range outdated
+    # print(Omega.shape)
+    # print(Omega)
+    # raise
     loss_temporal = torch.sum(path * Omega) / (N_output * N_output)
     loss = alpha * loss_shape + (1 - alpha) * loss_temporal
+
+    # print("dilate_loss DONE ")
     return loss, loss_shape, loss_temporal
 

@@ -1,7 +1,7 @@
 import math
 import torch
 import torch.nn as nn
-import torch.functional as F
+import torch.nn.functional as F
 import torch.optim as optim
 import xarray as xr
 # import d2l.torch as d2l
