@@ -182,8 +182,11 @@ class SoftDTWBatch(Function):
         for k in range(0, batch_size):  # loop over all D in the batch
             Rk = torch.FloatTensor(compute_softdtw(D_[k, :, :], g_)).to(dev)
             R[k:k + 1, :, :] = Rk
+            print("Rk[-2, -2] : ", Rk[-2, -2])
             total_loss = total_loss + Rk[-2, -2]
         ctx.save_for_backward(D, R, gamma)
+        print("total_loss : ", total_loss)
+        print("batch_size : ", batch_size)
         return total_loss / batch_size
 
     @staticmethod

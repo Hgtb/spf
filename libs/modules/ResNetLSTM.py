@@ -1,5 +1,6 @@
 from libs.modules.includes import *
 from libs.modules.thirdPart import AdditiveAttention, dilate_loss, MyTimer
+from libs.modules.soft_dtw_cuda import SoftDTW
 from libs.dataLoader import DataLoader
 
 """
@@ -106,8 +107,10 @@ class Conv1X(nn.Module):
         self.use_checkpoint = use_checkpoint
         self.convBlock = nn.Sequential(  # 1*120*120 -> 64*116*116 -> 64*112*112 -> 64*56*565
             nn.Conv2d(in_channels=1, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(in_channels=64, out_channels=64, kernel_size=(5, 5), stride=(1, 1), padding=0, bias=False),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2)
         )
@@ -392,14 +395,8 @@ class ResNetSeq2SeqAttention(nn.Module):
         # x.requires_grad = True
         # target_data.requires_grad = True
 
-        # print("train_module : ")
-
-        # x = x.half()  # Convert input from float32 to float16.
-        # print("x : ", x[0])
         # res_output.shape : torch.Size([360, 2048, 1, 1])
         res_output = self.ResNet(x)
-        # res_output = torch.rand(360, 2048, 1, 1)
-        # res_output.requires_grad = True
         del x
 
         # res_output.shape : torch.Size([360, 1, 2048])
@@ -509,11 +506,10 @@ def train_ResNetSeq2SeqAttention(model: ResNetSeq2SeqAttention,
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    # loss_func = dilate_loss  # dilate_loss 计算为负值
-    loss_func = nn.MSELoss()
+    loss_func = SoftDTW(use_cuda=True, gamma=1.0, normalize=True)  # dilate_loss 计算为负值
     Loss = []
-    # Loss_shape = []
-    # Loss_temporal = []
+    Loss_shape = []
+    Loss_temporal = []
     for epoch in range(num_epoch):
         torch.cuda.empty_cache()
         timer = MyTimer()
@@ -534,24 +530,21 @@ def train_ResNetSeq2SeqAttention(model: ResNetSeq2SeqAttention,
             target_data = torch.unsqueeze(target_data, dim=-1)  # [30, 1440] -> [30, 1440, 1]
             target_data = target_data.permute(1, 0, 2)  # [30, 1440, 1] -> [1440, 30, 1]
 
-            # loss, loss_shape, loss_temporal = loss_func(outputs=model_output, targets=target_data, alpha=alpha,
-            #                                             gamma=gamma, device=device)
-            loss = loss_func(model_output, target_data)
+            loss, loss_shape, loss_temporal = loss_func(outputs=model_output, targets=target_data, alpha=alpha,
+                                                        gamma=gamma, device=device)
 
             loss.backward()
             optimizer.step()
 
-            Loss.append(loss.sum().cpu().detach())
-            # Loss_shape.append(loss_shape.sum().cpu())
-            # Loss_temporal.append(loss_temporal.sum().cpu())
-            # loss_file.write(str(loss.cpu().detach().numpy()[0]))
+            Loss.append(loss.cpu().detach())
+            Loss_shape.append(loss_shape.cpu().detach())
+            Loss_temporal.append(loss_temporal.cpu().detach())
 
             print("loss : ", loss.cpu())
-            # print("loss_shape : ", loss_shape.cpu())
-            # print("loss_temporal : ", loss_temporal.cpu())
-            #
-            # del loss, loss_shape, loss_temporal
-            del loss
+            print("loss_shape : ", loss_shape.cpu())
+            print("loss_temporal : ", loss_temporal.cpu())
+
+            del loss, loss_shape, loss_temporal
             torch.cuda.empty_cache()
 
         print(f"latest loss {Loss[-1]}, cost {timer.stop()} sec on {str(device)}")
