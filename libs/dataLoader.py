@@ -124,26 +124,41 @@ class DataSet:
 
 class DataLoader:
     def __init__(self, dataSet: DataSet, device: torch.device = None):
-        self.device = device
+        self.device: torch.device = device
         self.dataSet: DataSet = dataSet
         if device is not None:
             self.dataSet.to_device(device)
         self.shifter: int = -1
-        self.len = len(self.dataSet) - (self.dataSet.trainDays + self.dataSet.targetDays) + 1
+        self._len: int = 0
+        self._calculate_len()
+
+    def _calculate_len(self):
+        self._len = len(self.dataSet) - (self.dataSet.trainDays + self.dataSet.targetDays) + 1
+        if self._len <= 0:
+            raise Exception(f"The length of DataSet is less than 0, the length of DataSet is {len(self.dataSet)}, need longer DataSet")
+
+    def resetShifter(self, shift:int = 0):
+        """DataLoader will start from `shift`"""
+        if (shift < 0) or (shift > self._len):
+            raise Exception(f"shift must in [0, {self._len}], but got {shift}")
 
     def to_device(self, device: torch.device):
         self.device = device
         self.dataSet.to_device(device)
 
+    def isel(self, startIndex: int, endIndex: int):
+        self.dataSet.isel(startIndex=startIndex, endIndex=startIndex + (endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1), inplace=True)
+        self._calculate_len()
+
     def __len__(self):
-        return self.len
+        return self._len
 
     def __iter__(self):
         return self
 
     def __next__(self):
         self.shifter += 1
-        if self.shifter < self.len:
+        if self.shifter < self._len:
             return self.dataSet[self.shifter]
         else:
             raise StopIteration

@@ -8,7 +8,6 @@ import datetime
 
 import time
 import timeit
-
 from functools import wraps
 
 
@@ -174,6 +173,13 @@ def autoTimeTransform(sec):
         hours = minutes // 60
         minutes = minutes % 60
     return [hours, minutes, sec]
+
+
+def showDevice():
+    print("Cuda is available : ", torch.cuda.is_available())
+    print("Cuda num : ", torch.cuda.device_count())  # gpu数量
+    print("Current cuda index : ", torch.cuda.current_device())
+    print("Current cuda name : ", torch.cuda.get_device_name(0))
 
 
 
