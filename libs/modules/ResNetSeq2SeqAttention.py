@@ -25,23 +25,23 @@ class ResNetSeq2SeqAttention(nn.Module):
         # The encoder and the decoder share the dense for decoding([*, 2048] -> [*, 1440]).
         self.dense = nn.Linear(in_features=seq2seq_hidden_size, out_features=output_size)
 
-    def forward(self, x: torch.Tensor, teacher_data: torch.Tensor = None, steps: int = None):  # Train Module
+    def forward(self, x: torch.Tensor, target_data: torch.Tensor = None, steps: int = None):  # Train Module
         """
         It can automatically select the operating mode of the decoder
         :param x: History data
-        :param teacher_data: The data used in teacher forcing, the length of `teacher_data` is the prediction steps
+        :param target_data: The data used in teacher forcing, the length of `teacher_data` is the prediction steps
         :param steps: The prediction steps in evaluate_module
         :return: module output data, shape is torch.Tensor([len(teacher_data) or steps, 1 output_size])
         """
         if x.shape != torch.Size([360, 1, 120, 120]):
             raise f"Module input shape error.Expect torch.Size([360, 1, 120, 120]), got {str(x.shape)}."
-        if self.training & (teacher_data is None):
+        if self.training & (target_data is None):
             raise "The mode of the model is training, but the parameter 'teacher_data' is not passed in."
         if (not self.training) & (steps is None):
             raise "The mode of the model is evaluating, but the parameter 'steps' is not passed in."
 
         if self.training:
-            return self.train_module(x, teacher_data)
+            return self.train_module(x, target_data)
         else:
             return self.evaluate_module(x, steps)
 
@@ -66,7 +66,7 @@ class ResNetSeq2SeqAttention(nn.Module):
         del res_output
 
         # dec_inputs.shape : torch.Size([30, 1440])
-        dec_inputs = torch.cat([self.dense(enc_output[-1]), target_data[1:]], dim=0)
+        dec_inputs = torch.cat([self.dense(enc_output[-1]), target_data[:-1]], dim=0)
         # print("dec_inputs : ", dec_inputs)
 
         dec_state = self.decoder.init_state(enc_outputs=(enc_output, enc_state))

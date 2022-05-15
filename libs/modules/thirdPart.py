@@ -6,6 +6,9 @@ import numpy as np
 from numba import jit
 from torch.autograd import Function
 from libs.modules.includes import *
+from IPython.core.display import *
+from IPython.lib.display import *
+
 
 #  from d2l
 def sequence_mask(X, valid_len, value=0):

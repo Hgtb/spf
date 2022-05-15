@@ -240,3 +240,6 @@ class ResNet(nn.Module):
         # print("ResNet DONE")
         # x : torch.Size([360, 2048, 1, 1])
         return x
+
+
+

@@ -147,9 +147,10 @@ class DownloadData(DownloadDataInterface):
         df = pd.DataFrame({"Parameters": self.parameters})
         df.to_csv(join(self.basicDataStoreFolder, "parameters.csv"), index=False)
 
-    def storeDailyData(self):
+    def storeDailyData(self, ignore_log=False):
         """
         保存后复权股票日行情数据
+        :param ignore_log: 默认为False，若为True则忽略下载日志重新下载
         """
         if self.stockList.empty:
             self.storeStockList()
@@ -159,17 +160,19 @@ class DownloadData(DownloadDataInterface):
 
         rem = pd.DataFrame()  # 存储前一天的行情数据，用于补全数据
 
-        log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
-
         tradeCal = []
-        if int(log["stockNum"]) != len(self.stockList):
-            # 股票数量改变，则每天的数据都需要重新下载
+        if ignore_log:
             tradeCal = self.tradeCal
         else:
-            # 获取 大于等于log中的endDate的日期 至 最新数据的日期 的切片
-            tradeCal = getSliceFromValues(self.tradeCal,
-                                          val1=dateNotLessThan(log["endDate"], self.tradeCal),
-                                          val2=self.endDate)
+            log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
+            if int(log["stockNum"]) != len(self.stockList):
+                # 股票数量改变，则每天的数据都需要重新下载
+                tradeCal = self.tradeCal
+            else:
+                # 获取 大于等于log中的endDate的日期 至 最新数据的日期 的切片
+                tradeCal = getSliceFromValues(self.tradeCal,
+                                              val1=dateNotLessThan(log["endDate"], self.tradeCal),
+                                              val2=self.endDate)
 
         for date in tqdm(tradeCal):
             date = int(date)
@@ -217,7 +220,7 @@ class DownloadData(DownloadDataInterface):
     def storeDailyBasic(self):
         """
         保存每日指标
-        暂且没有功能，不知道获取的因子有什么用处
+        暂且没有实现
         """
         pass
 
@@ -227,11 +230,11 @@ class DownloadData(DownloadDataInterface):
         print("    Stock quantity : ", len(self.stockList), "  Stocks")
         print("    Parameters :     ", len(self.parameters), "  Parameters")
 
-    def storeData(self):  # 在storeStockList修复前不推荐使用
+    def storeData(self, ignore_log=False):  # 在storeStockList修复前不推荐使用
         self.storeTradeCal()
         self.storeStockList()
         self.storeParameters()
-        self.storeDailyData()
+        self.storeDailyData(ignore_log)
         self.storeDailyBasic()
 
 

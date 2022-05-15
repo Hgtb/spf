@@ -122,6 +122,7 @@ class DataSet:
         return len(self.data.Date)
 
 
+# ToDo(Alex Han) 检测DataLoader的len是否计算正确、isel功能是否正常
 class DataLoader:
     def __init__(self, dataSet: DataSet, device: torch.device = None):
         self.device: torch.device = device
