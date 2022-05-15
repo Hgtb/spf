@@ -22,16 +22,26 @@ def findSameNum(target, check_list: list):
 
 class DataSet:
     r"""
-    生成滑动窗口数据，每步返回两个值: trainData 和 targetData
-    trainData.shape = torch.Size([trainDays, stocksNum, parametersNum])
-    targetData.shape = torch.Size([targetDays, stocksNum]) 均为收盘价
-    trainDays 与 targetDays 可使用 setLength 函数更改
+    生成滑动窗口数据，每步返回三个值: encoder_input, decoder_input 和 target_data
+
+    encoder_input : torch.Size([encoder_input_steps, stocksNum, parametersNum])
+    decoder_input : torch.Size([encoder_input_steps, stocksNum, parametersNum])
+    target_data : torch.Size([encoder_input_steps, stocksNum, parametersNum])
+
+    trainDays 与 targetDays 可使用 setLength 函数更改.
+
+    encoder_input 与 decoder_input 的 parameters 由 encoderDecoderParameter 控制,
+    encoderDecoderParameter == None or all 时为全部参数, 否则为 encoderDecoderParameter 索引的参数.
+
+    target_data 的 parameters 由 targetDataParameter 控制，
+    encoderDecoderParameter == None or all 时为全部参数, 否则为 targetDataParameter 索引的参数.
 
     isel 函数：对数据进行切片，需要输入切片的开始和结束索引，以及进行切片操作的维度
     """
-
     def __init__(self, data: xr.DataArray = None, dataPath: str = None,
                  trainDays: int = 360, targetDays: int = 30,
+                 encoderDecoderParameter: str = None,
+                 targetDataParameter: str = "close",
                  isel: List[int] = None,  # [start_index, end_index]
                  device=None):
         self.device = device  # 自动将tensor转移device，device==None则不转移(默认使用CPU)
@@ -55,6 +65,8 @@ class DataSet:
 
         self.data.load()
         self.data = self.data.astype(np.float32)
+        self.encoderDecoderParameter = encoderDecoderParameter
+        self.targetDataParameter = targetDataParameter
         self.trainDays: int = trainDays
         self.targetDays: int = targetDays
 
@@ -76,47 +88,52 @@ class DataSet:
     def to_device(self, device: torch.device):
         self.device = device
 
-    def getTrainData(self, item: int):
-        r"""
-        data.nc中获取的是[-1, 1440, 10]的数据，需要转换为[-1, 120, 120]的数据
-        在使用返回的数据时，需要使用 trainData.reshape(360, 1, 120, 120)
-            reshape的工作方式:
-                                            0, 1, 2, 3
-               0, 1, 2, 3, 4, 5, 6, 7  ->   4, 5, 6, 7
-               9, 8, 7, 6, 5, 4, 3, 2  ->   9, 8, 7, 6
-                                            5, 4, 3, 2
-        :return: torch.Size([trainDays, stocksNum, parametersNum]) like torch.Size([360, 1570, 9])
-        """
-        if self.device is None:
-            return torch.Tensor(self.data.isel(Date=self.indexList[item: item + self.trainDays]).values)
+    def getData(self,  start: int, end: int, parameter: str):
+        data = None
+        if (parameter is None) or (parameter.lower() == "all"):
+            data = torch.Tensor(self.data
+                                .isel(Date=self.indexList[start: end])
+                                .values)
         else:
-            return torch.Tensor(self.data.isel(Date=self.indexList[item: item + self.trainDays]).values).to(self.device)
-
-    def getTargetData(self, item: int, Parameter: str = "close"):
-        r"""
-        :return: torch.Size([targetDays, stocksNum]) like torch.Size([30, 1440])
-        """
-        target_data = torch.Tensor(self.data
-                                   .isel(
-                                    Date=self.indexList[item + self.trainDays: item + self.trainDays + self.targetDays])
-                                   .sel(Parameter=Parameter)
-                                   .values)
-        times = findSameNum(target=Parameter, check_list=list(self.data.coords["Parameter"].data))
-        if times == 0:
-            raise "Parameter Error, can't find " + "'" + Parameter + "'" + " in " \
-                  + str(list(self.data.coords["Parameter"].data))
-        elif times > 1:
-            # print("WARNING : Found " + str(times) + " '" + Parameter + "' in data")
-            target_data = target_data[:, :, 1]
-            target_data = target_data.squeeze(dim=-1)
-
+            data = torch.Tensor(self.data
+                                .isel(Date=self.indexList[start: end])
+                                .sel(Parameter=parameter)
+                                .values)
+            times = findSameNum(target=parameter,
+                                check_list=list(self.data.coords["Parameter"].data))
+            if times == 0:
+                raise "Parameter Error, can't find " + "'" + parameter + "'" + " in " \
+                      + str(list(self.data.coords["Parameter"].data))
+            elif times > 1:
+                # print("WARNING : Found " + str(times) + " '" + Parameter + "' in data")
+                data = data[:, :, 1]
+                data = data.unsqueeze(dim=-1)
         if self.device is None:
-            return target_data
+            return data
         else:
-            return target_data.to(self.device)
+            return data.to(self.device)
+
+    def getEncoderInput(self, item: int):
+        r"""
+
+        :return: torch.Size([encoder_input_steps, stocksNum, parametersNum]) like torch.Size([360, 1440, 10])
+        """
+        return self.getData(start=item, end=item + self.trainDays, parameter=self.encoderDecoderParameter)
+
+    def getDecoderInput(self, item: int):
+        r"""
+        :return: torch.Size([decoder_steps, stocksNum, parameter_size]) like torch.Size([30, 1440, 1])
+        """
+        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays, parameter=self.encoderDecoderParameter)
+
+    def getTargetData(self, item: int):
+        r"""
+        :return: torch.Size([target_steps, stocksNum, parameter_size]) like torch.Size([30, 1440, 1])
+        """
+        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays, parameter=self.targetDataParameter)
 
     def __getitem__(self, item):
-        return self.getTrainData(item), self.getTargetData(item)
+        return self.getEncoderInput(item), self.getDecoderInput(item), self.getTargetData(item)
 
     def __len__(self):
         return len(self.data.Date)
@@ -136,9 +153,10 @@ class DataLoader:
     def _calculate_len(self):
         self._len = len(self.dataSet) - (self.dataSet.trainDays + self.dataSet.targetDays) + 1
         if self._len <= 0:
-            raise Exception(f"The length of DataSet is less than 0, the length of DataSet is {len(self.dataSet)}, need longer DataSet")
+            raise Exception(
+                f"The length of DataSet is less than 0, the length of DataSet is {len(self.dataSet)}, need longer DataSet")
 
-    def resetShifter(self, shift:int = 0):
+    def resetShifter(self, shift: int = 0):
         """DataLoader will start from `shift`"""
         if (shift < 0) or (shift > self._len):
             raise Exception(f"shift must in [0, {self._len}], but got {shift}")
@@ -148,7 +166,9 @@ class DataLoader:
         self.dataSet.to_device(device)
 
     def isel(self, startIndex: int, endIndex: int):
-        self.dataSet.isel(startIndex=startIndex, endIndex=startIndex + (endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1), inplace=True)
+        self.dataSet.isel(startIndex=startIndex,
+                          endIndex=startIndex + (endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1),
+                          inplace=True)
         self._calculate_len()
 
     def __len__(self):
