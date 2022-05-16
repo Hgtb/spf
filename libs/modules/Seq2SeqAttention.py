@@ -18,6 +18,7 @@ class Seq2SeqAttention(nn.Module):
                                                num_layers=num_layers, dropout=dropout)
         self.dense = nn.Linear(in_features=hidden_size, out_features=output_size)
 
+
     def forward(self, enc_input: torch.Tensor, dec_input: torch.Tensor = None, steps: int = None):
         """
         It can automatically select the operating mode of the decoder
@@ -65,13 +66,13 @@ class Seq2SeqAttention(nn.Module):
             decoder_output, decoder_attention_weights, decoder_states = self.decoder(decoder_input, decoder_states)
             decoder_input = self.dense(decoder_output)  # decoder_input : torch.Size([1, 1, output_size])
 
+            # decoder_attention_weights : torch.Size([5, 1, 360])
             output_seq.append(decoder_input)
             attention_weight_seq.append(decoder_attention_weights)
 
         # output_seq : torch.Size([steps, 1, output_size)]
         output_seq = torch.cat(output_seq, dim=0)
         attention_weight_seq = torch.cat(attention_weight_seq, dim=0)
-        print("attention_weight_seq : ", attention_weight_seq.shape)
 
         return output_seq, attention_weight_seq, decoder_states
 
@@ -150,11 +151,11 @@ def eval_Seq2SeqAttention(model: Seq2SeqAttention,
         # target_data : torch.Size([predict_steps, stock_num, parameters_num])
         model_input = model_input.reshape(360, 1, -1)
         model_output, attention_weight, _ = model(enc_input=model_input, steps=steps)
-        predict_seq.append(model_output.detach().cpu().permute(2, 0, 1).squeeze())  # (30, 1, 1440) -> (1440, 30)
-        print("model_output.detach().cpu().permute(2, 0, 1).squeeze() : ",
-              model_output.detach().cpu().permute(2, 0, 1).squeeze().shape)
-        target_seq.append(target_data.cpu().permute(1, 0, 2).squeeze())  # (30, 1440) -> (1440, 30)
-        print("target_data.cpu().permute(1, 0, 2).squeeze() : ", target_data.cpu().permute(1, 0, 2).squeeze().shape)
+        predict_seq.append(model_output.detach().cpu().permute(2, 0, 1).squeeze())  # (30, 1, 1440) -> (1440, 5)
+        # print("model_output.detach().cpu().permute(2, 0, 1).squeeze() : ",
+        #       model_output.detach().cpu().permute(2, 0, 1).squeeze().shape)
+        target_seq.append(target_data.cpu().permute(1, 0, 2).squeeze())  # (30, 1440) -> (1440, 5)
+        # print("target_data.cpu().permute(1, 0, 2).squeeze() : ", target_data.cpu().permute(1, 0, 2).squeeze().shape)
         attention_seq.append(attention_weight.detach().cpu())
 
     # len(predict_seq) = len(target_seq) = len9attention_seq) = steps
