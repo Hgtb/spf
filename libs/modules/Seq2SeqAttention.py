@@ -1,5 +1,4 @@
 import torch
-
 from libs.modules.includes import *
 from libs.modules.Seq2Seq import *
 from libs.modules.Loss import *
@@ -15,9 +14,9 @@ class Seq2SeqAttention(nn.Module):
         super(Seq2SeqAttention, self).__init__()
         self.encoder = Seq2SeqEncoder(input_size=input_size, hidden_size=hidden_size,
                                       num_layers=num_layers, dropout=dropout)
-        self.decoder = Seq2SeqAttentionDecoder(input_size=hidden_size, hidden_size=hidden_size,
+        self.decoder = Seq2SeqAttentionDecoder(input_size=input_size, hidden_size=hidden_size,
                                                num_layers=num_layers, dropout=dropout)
-        self.dense = nn.Linear(in_features=input_size, out_features=output_size)
+        self.dense = nn.Linear(in_features=hidden_size, out_features=output_size)
 
     def forward(self, enc_input: torch.Tensor, dec_input: torch.Tensor = None, steps: int = None):
         """
@@ -44,8 +43,7 @@ class Seq2SeqAttention(nn.Module):
         # dec_input : (seq_len, batch_size, input_size)
         encoder_output, encoder_state = self.encoder(enc_input)
         decoder_states = self.decoder.init_state(enc_outputs=(encoder_output, encoder_state))
-        print("enc_input[-1].unsqueeze(dim=0) : ", enc_input[-1].unsqueeze(dim=0).shape)
-        print("dec_input[:-1]] : ", dec_input[:-1].shape)
+        # torch.Size([1, 1, 1440]) + torch.Size([29, 1, 1440]) -> torch.Size([30, 1, 1440])
         dec_input = torch.cat([enc_input[-1].unsqueeze(dim=0), dec_input[:-1]], dim=0)  # 使用Encoder的最后一个输入作为开始(向前移动一步)
         decoder_output, decoder_attention_weights, decoder_states = self.decoder(dec_input, decoder_states)
         self.decoder.clean_attention_weights()
@@ -92,52 +90,72 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
         if type(m) == nn.GRU:
             for param in m._flat_weights_names:
                 if "weight" in param:
-                    nn.init.xavier_uniform_(m._parameters[param])
+                    nn.init.orthogonal_(m._parameters[param])
 
-    model.apply(xavier_init_weights)
+    if init_weights:
+        model.apply(xavier_init_weights)
     model.to(device)
+    dataLoader.to_device(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min", factor=0.5, patience=5,
+                                                           cooldown=100)
     loss = loss_function(loss_function_name)()
+    ls = []
+    l = torch.Tensor([0])
     model.train()
 
     for epoch in range(num_epochs):
-        for X, Y in tqdm(dataLoader, desc=f"epoch {epoch} training"):
-            # X : torch.Size([input_steps, batch_size, input_size])
-            # Y : torch.Size([predict_steps, output_size])
+        dataLoader.resetShifter()
+        tqdm_ = tqdm(dataLoader, desc=f"epoch {epoch} training")
+        for X, Y, _ in tqdm_:
+            # X : torch.Size([input_steps, stock_num, parameters_num])
+            # Y : torch.Size([predict_steps, stock_num, parameters_num])
             # input_size == output_size = 1440
             # batch_size = 1
             # input_steps = 360
             # predict_steps = 30
             optimizer.zero_grad()
-            X = X.reshape(360, 1, -1)
-            X = X.to(device)
-            Y = Y.to(device)
+            X = X.reshape(360, 1, -1)  # (input_steps, 1, stock_num * parameters_num)
+            Y = Y.reshape(5, 1, -1)  # (predict_steps, 1, stock_num * parameters_num)
 
             Y_hat, attention_weight_seq, _ = model(enc_input=X, dec_input=Y)
-            l = loss(Y_hat, Y.unsqueeze(dim=1))  # Y : torch.Size([30, 1440]) -> torch.Size([30, 1, 1440])
-            l.sum().backward()  # 有bug
+            l = loss(Y_hat, Y).sum()
+            l.backward()  # 有bug
+            ls.append(l.detach().cpu().item())
+
+            # print("Loss : ", l.sum())
             grad_clipping(model, 1)
             optimizer.step()
-    return model
+            scheduler.step(l.sum())
+
+            # tqdm 进度条更新 loss
+            tqdm_.set_postfix(loss=l.detach().item(), lr=optimizer.param_groups[0]['lr'])
+    return model, ls
 
 
 def eval_Seq2SeqAttention(model: Seq2SeqAttention,
                           device: torch.device,
                           dataLoader,
-                          steps: int,
+                          steps: int,  # predict_steps
                           loss_function_name: str = None):
     torch.no_grad()
     model.eval()
+    model.to(device)
+    dataLoader.to_device(device)
     predict_seq = []
     target_seq = []
     attention_seq = []
-    for model_input, target_data in dataLoader:
-        model_input.to(device)
-
+    for model_input, target_data, _ in dataLoader:
+        # model_input : torch.Size([input_steps, stock_num, parameters_num])
+        # target_data : torch.Size([predict_steps, stock_num, parameters_num])
+        model_input = model_input.reshape(360, 1, -1)
         model_output, attention_weight, _ = model(enc_input=model_input, steps=steps)
-
         predict_seq.append(model_output.detach().cpu().permute(2, 0, 1).squeeze())  # (30, 1, 1440) -> (1440, 30)
-        target_seq.append(target_data.permute(1, 0))  # (30, 1440) -> (1440, 30)
+        print("model_output.detach().cpu().permute(2, 0, 1).squeeze() : ",
+              model_output.detach().cpu().permute(2, 0, 1).squeeze().shape)
+        target_seq.append(target_data.cpu().permute(1, 0, 2).squeeze())  # (30, 1440) -> (1440, 30)
+        print("target_data.cpu().permute(1, 0, 2).squeeze() : ", target_data.cpu().permute(1, 0, 2).squeeze().shape)
         attention_seq.append(attention_weight.detach().cpu())
 
+    # len(predict_seq) = len(target_seq) = len9attention_seq) = steps
     return predict_seq, target_seq, attention_seq

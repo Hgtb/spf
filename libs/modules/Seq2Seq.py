@@ -56,26 +56,28 @@ class Seq2SeqAttentionDecoder(nn.Module):
         decoder_inputs = self.embedding(decoder_inputs)
         outputs, self._attention_weights = [], []
         for decoder_input in decoder_inputs:
+            # decoder_input: torch.Size([1, 1, hidden_size])
             decoder_input = decoder_input.unsqueeze(dim=0)
-            decoder_input = decoder_input.unsqueeze(dim=0)
-            # query :  torch.Size([1, 1, 2048])
+            # query :  torch.Size([1, 1, hidden_size])
             query = torch.unsqueeze(hidden_state[-1], dim=1)
-            # context :  torch.Size([1, 1, 2048])
+            # context :  torch.Size([1, 1, hidden_size])
             context = self.attention(query, enc_outputs, enc_outputs, enc_valid_lens)  # bahdanau attention
-            # decoder_input :  torch.Size([1, 1, 2048]) -> torch.Size([1, 1, 4096])
+
+            # decoder_input: torch.Size([1, 1, 2 * hidden_size])
             decoder_input = torch.cat([context, decoder_input], dim=-1)
-            # out :  torch.Size([1, 1, 2048])
+
+            # out :  torch.Size([1, 1, hidden_size])
             out, hidden_state = self.gru(decoder_input.permute(1, 0, 2), hidden_state)
             outputs.append(out)
             with torch.no_grad():
                 # self.attention.attention_weights : torch.Tensor
-                # self.attention.attention_weights.shape : torch.Size([1, 1, 360])
+                # self.attention.attention_weights.shape : torch.Size([1, 1, encoder_steps])
                 self._attention_weights.append(self.attention.attention_weights)
 
-        # 30*[1, 1, 360] -> [30, 1, 360]
+        # 30*[1, 1, 360] -> [decoder_steps, 1, encoder_steps]
         self._attention_weights = torch.cat(self._attention_weights, dim=0).detach().cpu()
         # outputs: list -> torch.Tensor
-        # [torch.Size([1, 1, 2048]), torch.Size([1, 1, 2048]), ...] -> torch.Size([30, 1, 2048])
+        # [torch.Size([1, 1, hidden_size]), torch.Size([1, 1, hidden_size]), ...] -> torch.Size([encoder_steps, 1, hidden_size])
         return torch.cat(outputs, dim=0), self._attention_weights, [enc_outputs, hidden_state, enc_valid_lens]
 
     @property

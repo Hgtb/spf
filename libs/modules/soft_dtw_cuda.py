@@ -275,7 +275,7 @@ class SoftDTW(torch.nn.Module):
     The soft DTW implementation that optionally supports CUDA
     """
 
-    def __init__(self, use_cuda, gamma=1.0, normalize=False, bandwidth=None, dist_func=None):
+    def __init__(self, use_cuda=True, gamma=1.0, normalize=False, bandwidth=None, dist_func=None):
         """
         Initializes a new instance using the supplied parameters
         :param use_cuda: Flag indicating whether the CUDA implementation should be used

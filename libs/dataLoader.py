@@ -160,6 +160,7 @@ class DataLoader:
         """DataLoader will start from `shift`"""
         if (shift < 0) or (shift > self._len):
             raise Exception(f"shift must in [0, {self._len}], but got {shift}")
+        self.shifter = shift - 1
 
     def to_device(self, device: torch.device):
         self.device = device
@@ -167,7 +168,7 @@ class DataLoader:
 
     def isel(self, startIndex: int, endIndex: int):
         self.dataSet.isel(startIndex=startIndex,
-                          endIndex=startIndex + (endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1),
+                          endIndex=endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1,
                           inplace=True)
         self._calculate_len()
 
