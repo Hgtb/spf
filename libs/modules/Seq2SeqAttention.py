@@ -18,17 +18,14 @@ class Seq2SeqAttention(nn.Module):
                                                num_layers=num_layers, dropout=dropout)
         self.dense = nn.Linear(in_features=hidden_size, out_features=output_size)
 
-
     def forward(self, enc_input: torch.Tensor, dec_input: torch.Tensor = None, steps: int = None):
         """
-        It can automatically select the operating mode of the decoder
+        自动选择运行模式,每次处理一个batch的数据
         :param enc_input: History data
         :param dec_input: The data used in teacher forcing, the length of `teacher_data` is the prediction steps
         :param steps: The prediction steps in evaluate_module
         :return: module output data, shape is torch.Tensor([len(teacher_data) or steps, 1 output_size])
         """
-        # if x.shape != torch.Size([360, 1, 120, 120]):
-        #     raise f"Module input shape error.Expect torch.Size([360, 1, 120, 120]), got {str(x.shape)}."
         if self.training & (dec_input is None):
             raise "The mode of the model is training, but the parameter 'teacher_data' is not passed in."
         if (not self.training) & (steps is None):
@@ -39,41 +36,75 @@ class Seq2SeqAttention(nn.Module):
         else:
             return self.evaluate_module(enc_input, steps)
 
-    def train_module(self, enc_input: torch.Tensor, dec_input: torch.Tensor):
-        # enc_input : (seq_len, batch_size, input_size)
-        # dec_input : (seq_len, batch_size, input_size)
-        encoder_output, encoder_state = self.encoder(enc_input)
+    def train_module(self, enc_inputs: torch.Tensor, dec_inputs: torch.Tensor):
+        """
+        :param enc_inputs: (batch_size,num_steps,embed_size)
+        :param dec_inputs: (batch_size,num_steps,embed_size)
+        :return:
+        """
+        output_seq = []
+        attention_weight_seq = []
+
+        # encoder_output的形状:(num_steps,batch_size,num_hiddens)
+        encoder_output, encoder_state = self.encoder(enc_inputs)
         decoder_states = self.decoder.init_state(enc_outputs=(encoder_output, encoder_state))
-        # torch.Size([1, 1, 1440]) + torch.Size([29, 1, 1440]) -> torch.Size([30, 1, 1440])
-        dec_input = torch.cat([enc_input[-1].unsqueeze(dim=0), dec_input[:-1]], dim=0)  # 使用Encoder的最后一个输入作为开始(向前移动一步)
-        decoder_output, decoder_attention_weights, decoder_states = self.decoder(dec_input, decoder_states)
-        self.decoder.clean_attention_weights()
-        decoder_output = self.dense(decoder_output)
 
-        # decoder_output : torch.Size([steps or len(dec_input), batch_size, output_size])
-        # decoder_attention_weights :
-        # decoder_states : [enc_outputs, hidden_state, enc_valid_lens]
-        return decoder_output, decoder_attention_weights, decoder_states
+        # enc_inputs : (enc_steps, batch_size, embed_size)
+        # dec_inputs : (dec_steps, batch_size, embed_size)
+        enc_inputs = enc_inputs.permute(1, 0, 2)
+        dec_inputs = dec_inputs.permute(1, 0, 2)
 
-    def evaluate_module(self, enc_input: torch.Tensor, steps: int):
-        encoder_output, encoder_state = self.encoder(enc_input)
-        decoder_states = self.decoder.init_state(enc_outputs=(encoder_output, encoder_state))
-        decoder_input = enc_input[-1].unsqueeze(dim=0)  # decoder_input : torch.Size([1, 1, input_size])
-        output_seq, attention_weight_seq = [], []
-        for step in range(steps):
-            # decoder_output : torch.Size([1, 1, hidden_size])
+        # 拼接encoder的最后一步输入和decoder的第一至倒数第二步,作为decoder的输入
+        # dec_inputs : (dec_steps, batch_size, embed_size)
+        dec_inputs = torch.cat([enc_inputs[-1].unsqueeze(dim=0), dec_inputs[:-1]], dim=0)
 
-            decoder_output, decoder_attention_weights, decoder_states = self.decoder(decoder_input, decoder_states)
-            decoder_input = self.dense(decoder_output)  # decoder_input : torch.Size([1, 1, output_size])
+        for step in range(len(dec_inputs)):
+            # dec_input : (batch_size=1, steps=1, input_size)
+            dec_input = dec_inputs[step].unsqueeze(dim=0)
+            dec_output, decoder_attention_weights, decoder_states = self.decoder(dec_input, decoder_states)
+            dec_output = self.dense(dec_output)
 
-            # decoder_attention_weights : torch.Size([5, 1, 360])
-            output_seq.append(decoder_input)
+            output_seq.append(dec_output)
             attention_weight_seq.append(decoder_attention_weights)
 
-        # output_seq : torch.Size([steps, 1, output_size)]
+        # output_seq : (dec_steps, batch_size, output_size)
+        # attention_weight_seq : (steps, 1, enc_steps)
         output_seq = torch.cat(output_seq, dim=0)
-        attention_weight_seq = torch.cat(attention_weight_seq, dim=0)
+        attention_weight_seq = torch.cat(attention_weight_seq, dim=0).detach().cpu()
 
+        # decoder_states : [enc_outputs, hidden_state]
+        return output_seq, attention_weight_seq, decoder_states
+
+    def evaluate_module(self, enc_inputs: torch.Tensor, steps: int):
+        """
+        :param enc_inputs: (batch_size,num_steps,embed_size)
+        :param steps:
+        :return:
+        """
+
+        output_seq = []
+        attention_weight_seq = []
+
+        # output的形状:(num_steps,batch_size,num_hiddens)
+        encoder_output, encoder_state = self.encoder(enc_inputs)
+        decoder_states = self.decoder.init_state(enc_outputs=(encoder_output, encoder_state))
+
+        # 拼接encoder的最后一步作为输入
+        dec_input = enc_inputs[-1].unsqueeze(dim=0)
+
+        for step in range(steps):
+            dec_output, decoder_attention_weights, decoder_states = self.decoder(dec_input, decoder_states)
+            dec_input = self.dense(dec_output)
+
+            output_seq.append(dec_input)
+            attention_weight_seq.append(decoder_attention_weights)
+
+        # output_seq : (steps, batch_size, output_size)
+        # attention_weight_seq : (steps, ...
+        output_seq = torch.cat(output_seq, dim=0)
+        attention_weight_seq = torch.cat(attention_weight_seq, dim=0).detach().cpu()
+
+        # decoder_states : [enc_outputs, hidden_state]
         return output_seq, attention_weight_seq, decoder_states
 
 
@@ -93,43 +124,54 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
                 if "weight" in param:
                     nn.init.orthogonal_(m._parameters[param])
 
+    model.to(device)
     if init_weights:
         model.apply(xavier_init_weights)
-    model.to(device)
     dataLoader.to_device(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min", factor=0.5, patience=5,
-                                                           cooldown=100)
+                                                           cooldown=50)
     loss = loss_function(loss_function_name)()
-    ls = []
-    l = torch.Tensor([0])
+    ls = []  # 记录每一batch的loss
     model.train()
 
     for epoch in range(num_epochs):
         dataLoader.resetShifter()
         tqdm_ = tqdm(dataLoader, desc=f"epoch {epoch} training")
         for X, Y, _ in tqdm_:
-            # X : torch.Size([input_steps, stock_num, parameters_num])
-            # Y : torch.Size([predict_steps, stock_num, parameters_num])
-            # input_size == output_size = 1440
-            # batch_size = 1
-            # input_steps = 360
-            # predict_steps = 30
+            # X : torch.Size([enc_steps, stock_num, parameters_num])
+            # Y : torch.Size([dec_steps, stock_num, parameters_num])
             optimizer.zero_grad()
-            X = X.reshape(360, 1, -1)  # (input_steps, 1, stock_num * parameters_num)
-            Y = Y.reshape(5, 1, -1)  # (predict_steps, 1, stock_num * parameters_num)
 
-            Y_hat, attention_weight_seq, _ = model(enc_input=X, dec_input=Y)
+            enc_steps, _, _ = X.shape
+            dec_steps, _, _ = Y.shape
+
+            # input_size = stock_num * parameters_num
+            # X : (enc_steps, input_size)
+            # Y : (dec_steps, input_size)
+            X = X.reshape(enc_steps, -1)
+            Y = Y.reshape(dec_steps, -1)
+
+            # batch_size = 1
+            # X : torch.Size([batch_size, enc_steps, input_size])
+            # Y : torch.Size([batch_size, dec_steps, input_size])
+            X = X.unsqueeze(dim=0)
+            Y = Y.unsqueeze(dim=0)
+
+            # Y_hat : (dec_steps, batch_size, output_size)
+            Y_hat, _, _ = model(enc_input=X, dec_input=Y)
+
+            # Y_hat : (batch_size, dec_steps, input_size)
+            Y_hat = Y_hat.permute(1, 0, 2)
             l = loss(Y_hat, Y).sum()
-            l.backward()  # 有bug
+            l.backward()
             ls.append(l.detach().cpu().item())
 
-            # print("Loss : ", l.sum())
             grad_clipping(model, 1)
             optimizer.step()
             scheduler.step(l.sum())
 
-            # tqdm 进度条更新 loss
+            # tqdm 进度条更新 loss, lr
             tqdm_.set_postfix(loss=l.detach().item(), lr=optimizer.param_groups[0]['lr'])
     return model, ls
 
@@ -137,26 +179,55 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
 def eval_Seq2SeqAttention(model: Seq2SeqAttention,
                           device: torch.device,
                           dataLoader,
-                          steps: int,  # predict_steps
+                          steps: int,  # dec_steps
                           loss_function_name: str = None):
     torch.no_grad()
     model.eval()
     model.to(device)
     dataLoader.to_device(device)
+
     predict_seq = []
     target_seq = []
     attention_seq = []
+
     for model_input, target_data, _ in dataLoader:
-        # model_input : torch.Size([input_steps, stock_num, parameters_num])
-        # target_data : torch.Size([predict_steps, stock_num, parameters_num])
-        model_input = model_input.reshape(360, 1, -1)
+        # model_input : torch.Size([enc_steps, stock_num, parameters_num])
+        # target_data : torch.Size([dec_steps, stock_num, parameters_num])
+
+        enc_steps, stock_num, _ = model_input.shape
+        dec_steps, stock_num, _ = target_data.shape
+
+        # input_size = stock_num * parameters_num
+        # X : (enc_steps, input_size)
+        model_input = model_input.reshape(enc_steps, -1)
+        target_data = target_data.reshape(dec_steps, -1)
+
+        # batch_size = 1
+        # model_input : torch.Size([batch_size, enc_steps, input_size])
+        # model_input : torch.Size([batch_size, dec_steps, output_size])
+        model_input = model_input.unsqueeze(dim=0)
+        target_data = target_data.unsqueeze(dim=0)
+
+        # output_seq : (steps, batch_size, output_size)
         model_output, attention_weight, _ = model(enc_input=model_input, steps=steps)
-        predict_seq.append(model_output.detach().cpu().permute(2, 0, 1).squeeze())  # (30, 1, 1440) -> (1440, 5)
-        # print("model_output.detach().cpu().permute(2, 0, 1).squeeze() : ",
-        #       model_output.detach().cpu().permute(2, 0, 1).squeeze().shape)
-        target_seq.append(target_data.cpu().permute(1, 0, 2).squeeze())  # (30, 1440) -> (1440, 5)
-        # print("target_data.cpu().permute(1, 0, 2).squeeze() : ", target_data.cpu().permute(1, 0, 2).squeeze().shape)
-        attention_seq.append(attention_weight.detach().cpu())
+
+        # model_output : (1, dec_steps, output_size)
+        # target_data  : (1, dec_steps, output_size)
+        # attention_weight : (1, dec_steps, enc_steps)
+        model_output = model_output.detach().cpu().permute(1, 0, 2).squeeze()
+        target_data = target_data.cpu()
+        attention_weight = attention_weight.detach().cpu().permute(1, 0, 2)
+
+        predict_seq.append(model_output)
+        target_seq.append(target_data)
+        attention_seq.append(attention_weight)
+
+    # predict_seq   : (dataLoader_len, dec_steps, output_size)
+    # target_seq    : (dataLoader_len, dec_steps, output_size)
+    # attention_seq : (dataLoader_len, dec_steps, 1, enc_steps)
+    predict_seq = torch.cat(predict_seq, dim=0)
+    target_seq = torch.cat(target_seq, dim=0)
+    attention_seq = torch.cat(attention_seq, dim=0)
 
     # len(predict_seq) = len(target_seq) = len9attention_seq) = steps
     return predict_seq, target_seq, attention_seq

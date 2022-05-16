@@ -71,7 +71,14 @@ class AdditiveAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.attention_weights = None
 
-    def forward(self, queries, keys, values, valid_lens):
+    def forward(self, queries, keys, values, valid_lens=None):
+        """
+        :param queries: (`batch_size`, no. of queries, 1, `num_hiddens`)
+        :param keys: (`batch_size`, 1, no. of key-value pairs, `num_hiddens`)
+        :param values:
+        :param valid_lens:
+        :return:
+        """
         queries, keys = self.W_q(queries), self.W_k(keys)
         # After dimension expansion, shape of `queries`: (`batch_size`, no. of
         # queries, 1, `num_hiddens`) and shape of `keys`: (`batch_size`, 1,

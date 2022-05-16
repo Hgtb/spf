@@ -9,9 +9,13 @@ class Seq2SeqEncoder(nn.Module):
         self.gru = nn.GRU(input_size=hidden_size, hidden_size=hidden_size, num_layers=num_layers, dropout=dropout)
 
     def forward(self, x):
-        # x : torch.Size([360, 1, 2048])
+        # 输出'X'的形状：(batch_size,num_steps,embed_size)
         x = self.embedding(x)
+        # 在循环神经网络模型中，第一个轴对应于时间步,(batch_size,num_steps,embed_size)->(num_steps,batch_size,embed_size)
+        x = x.permute(1, 0, 2)
         out, hidden_state = self.gru(x)
+        # output的形状:(num_steps,batch_size,num_hiddens)
+        # state[0]的形状:(num_layers,batch_size,num_hiddens)
         return out, hidden_state
 
 
@@ -29,6 +33,7 @@ class Seq2SeqDecoder(nn.Module):
         out = F.relu(out)
         out, hidden = self.gru(out, hidden)
         out = self.out(out[0])
+
         return out, hidden
 
 
@@ -41,52 +46,45 @@ class Seq2SeqAttentionDecoder(nn.Module):
         self.gru = nn.GRU(input_size=hidden_size * 2, hidden_size=hidden_size,
                           num_layers=num_layers, dropout=dropout)
 
-        self._attention_weights = []
-
-    def init_state(self, enc_outputs, enc_valid_lens=None, *args):
+    def init_state(self, enc_outputs):
         # outputs的形状为(batch_size，num_steps，num_hiddens).
         # hidden_state的形状为(num_layers，batch_size，num_hiddens)
         outputs, hidden_state = enc_outputs
-        return outputs.permute(1, 0, 2), hidden_state, enc_valid_lens
+        return outputs.permute(1, 0, 2), hidden_state
 
-    def forward(self, decoder_inputs, decoder_state):
-        # [num_layers, 1, 2048]
-        enc_outputs, hidden_state, enc_valid_lens = decoder_state
-        # decoder_inputs :  torch.Size([30, 1440]) -> torch.Size([30, 2048])
-        decoder_inputs = self.embedding(decoder_inputs)
-        outputs, self._attention_weights = [], []
-        for decoder_input in decoder_inputs:
-            # decoder_input: torch.Size([1, 1, hidden_size])
-            decoder_input = decoder_input.unsqueeze(dim=0)
-            # query :  torch.Size([1, 1, hidden_size])
-            query = torch.unsqueeze(hidden_state[-1], dim=1)
-            # context :  torch.Size([1, 1, hidden_size])
-            context = self.attention(query, enc_outputs, enc_outputs, enc_valid_lens)  # bahdanau attention
+    def forward(self, decoder_input, decoder_state):
+        """
+        :param decoder_input: (batch_size,num_steps,embed_size)
+        :param decoder_state: [enc_outputs, hidden_state]
+        :return:
+        """
 
-            # decoder_input: torch.Size([1, 1, 2 * hidden_size])
-            decoder_input = torch.cat([context, decoder_input], dim=-1)
+        # enc_outputs的形状为(batch_size,num_steps,num_hiddens).
+        # hidden_state的形状为(num_layers,batch_size,num_hiddens)
+        enc_outputs, hidden_state = decoder_state
 
-            # out :  torch.Size([1, 1, hidden_size])
-            out, hidden_state = self.gru(decoder_input.permute(1, 0, 2), hidden_state)
-            outputs.append(out)
-            with torch.no_grad():
-                # self.attention.attention_weights : torch.Tensor
-                # self.attention.attention_weights.shape : torch.Size([1, 1, encoder_steps])
-                self._attention_weights.append(self.attention.attention_weights)
+        # decoder_input : (batch_size, steps, hidden_size)
+        decoder_input = self.embedding(decoder_input)
 
-        # 30*[1, 1, 360] -> [decoder_steps, 1, encoder_steps]
-        self._attention_weights = torch.cat(self._attention_weights, dim=0).detach().cpu()
-        # outputs: list -> torch.Tensor
-        # [torch.Size([1, 1, hidden_size]), torch.Size([1, 1, hidden_size]), ...] -> torch.Size([encoder_steps, 1, hidden_size])
-        return torch.cat(outputs, dim=0), self._attention_weights, [enc_outputs, hidden_state, enc_valid_lens]
+        # decoder_input : (steps, batch_size, hidden_size)
+        decoder_input = decoder_input.permute(1, 0, 2)
 
-    @property
-    def attention_weights(self):
-        return self._attention_weights
+        # query :  torch.Size([1, 1, hidden_size])
+        query = torch.unsqueeze(hidden_state[-1], dim=1)  # 使用上一步的隐藏状态
+        # context :  torch.Size([1, 1, hidden_size])
+        context = self.attention(query, enc_outputs, enc_outputs, None)  # bahdanau attention
 
-    def clean_attention_weights(self):
-        self._attention_weights = []
-        torch.cuda.empty_cache()
+        # print("query : ", query.shape)
+        # print("context : ", context.shape)
+        # print("decoder_input : ", decoder_input.shape)
+
+        # decoder_input: torch.Size([1, 1, 2 * hidden_size])
+        decoder_input = torch.cat([context, decoder_input], dim=-1)
+
+        # out : (num_steps,batch_size,num_hiddens).
+        out, hidden_state = self.gru(decoder_input.permute(1, 0, 2), hidden_state)
+
+        return out, self.attention.attention_weights, [enc_outputs, hidden_state]
 
 
 class Seq2SeqAttention(nn.Module):  # 弃用
