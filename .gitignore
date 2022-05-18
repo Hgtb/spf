@@ -18,6 +18,7 @@ libs/dask-worker-space
 *.ipa
 *.apk
 *.json
+*.pth
 #libs/*.ipynb
 
 # Project files, i.e. `.project`, `.actionScriptProperties` and `.flexProperties`

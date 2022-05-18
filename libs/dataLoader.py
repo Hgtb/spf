@@ -5,6 +5,7 @@ from typing import List
 import xarray as xr
 import torch
 import numpy as np
+import random
 
 
 def DataLength(dataPath):
@@ -141,14 +142,18 @@ class DataSet:
 
 # ToDo(Alex Han) 检测DataLoader的len是否计算正确、isel功能是否正常
 class DataLoader:
-    def __init__(self, dataSet: DataSet, device: torch.device = None):
+    def __init__(self, dataSet: DataSet, device: torch.device = None, shuffle: bool = True):
         self.device: torch.device = device
         self.dataSet: DataSet = dataSet
         if device is not None:
             self.dataSet.to_device(device)
         self.shifter: int = -1
         self._len: int = 0
+        self.shuffle: bool = shuffle
         self._calculate_len()
+
+        self._index: list = []
+        self._init_index(self.shuffle)
 
     def _calculate_len(self):
         self._len = len(self.dataSet) - (self.dataSet.trainDays + self.dataSet.targetDays) + 1
@@ -156,11 +161,17 @@ class DataLoader:
             raise Exception(
                 f"The length of DataSet is less than 0, the length of DataSet is {len(self.dataSet)}, need longer DataSet")
 
-    def resetShifter(self, shift: int = 0):
+    def _init_index(self, shuffle: bool):
+        self._index = [i for i in range(self._len)]
+        if shuffle:
+            random.shuffle(self._index)
+
+    def reset(self, shift: int = 0, shuffle: bool = True):
         """DataLoader will start from `shift`"""
         if (shift < 0) or (shift > self._len):
             raise Exception(f"shift must in [0, {self._len}], but got {shift}")
         self.shifter = shift - 1
+        self._init_index(shuffle)
 
     def to_device(self, device: torch.device):
         self.device = device
@@ -171,6 +182,7 @@ class DataLoader:
                           endIndex=endIndex + (self.dataSet.trainDays + self.dataSet.targetDays) - 1,
                           inplace=True)
         self._calculate_len()
+        self._init_index(self.shuffle)
 
     def __len__(self):
         return self._len

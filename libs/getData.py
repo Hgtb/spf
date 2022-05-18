@@ -6,6 +6,20 @@ import tushare as ts
 from tqdm import tqdm
 import xarray as xr
 
+token = "b54bfb5fc70a78e4962b8c55911b93a0a4ddd4c764115aeee3c301a3"
+
+
+def getDailyData(stock_id: str, start_date: str, adj: str):
+    """
+    获取一支股票的日频数据
+    :param stock_id:
+    :param start_date:
+    :param adj:
+    :return:
+    """
+    daily_data = ts.pro_bar(stock_id, start_date=start_date, adj=adj, freq="D")
+    return daily_data
+
 
 def dateNoGreaterThan(date: int, tradeCal: list) -> int:
     for index in range(len(tradeCal) - 1, -1, -1):  # index = 3, 2, 1, 0
@@ -165,7 +179,7 @@ class DownloadData(DownloadDataInterface):
             tradeCal = self.tradeCal
         else:
             log = readLog(logPath=self.rawDataPath + "storeLog.json")  # 读取数据存储日志，根据日志记录的最后一天继续下载数据
-            if int(log["stockNum"]) != len(self.stockList):
+            if int(log["stock_num"]) != len(self.stockList):
                 # 股票数量改变，则每天的数据都需要重新下载
                 tradeCal = self.tradeCal
             else:

@@ -89,7 +89,10 @@ class Seq2SeqAttention(nn.Module):
         encoder_output, encoder_state = self.encoder(enc_inputs)
         decoder_states = self.decoder.init_state(enc_outputs=(encoder_output, encoder_state))
 
-        # 拼接encoder的最后一步作为输入
+        # dec_inputs : (dec_steps, batch_size, embed_size)
+        enc_inputs = enc_inputs.permute(1, 0, 2)
+
+        # 使用encoder的最后一步作为输入
         dec_input = enc_inputs[-1].unsqueeze(dim=0)
 
         for step in range(steps):
@@ -114,9 +117,10 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
                            loss_function_name: str,
                            num_epochs: int,
                            dataLoader,
-                           init_weights: bool = True,
+                           init_weight: bool = True,
+                           use_scheduler: bool = False
                            ):
-    def xavier_init_weights(m):
+    def init_weights(m):
         if type(m) == nn.Linear:
             nn.init.xavier_uniform_(m.weight)
         if type(m) == nn.GRU:
@@ -125,8 +129,8 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
                     nn.init.orthogonal_(m._parameters[param])
 
     model.to(device)
-    if init_weights:
-        model.apply(xavier_init_weights)
+    if init_weight:
+        model.apply(init_weights)
     dataLoader.to_device(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min", factor=0.5, patience=5,
@@ -136,7 +140,7 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
     model.train()
 
     for epoch in range(num_epochs):
-        dataLoader.resetShifter()
+        dataLoader.reset()
         tqdm_ = tqdm(dataLoader, desc=f"epoch {epoch} training")
         for X, Y, _ in tqdm_:
             # X : torch.Size([enc_steps, stock_num, parameters_num])
@@ -169,7 +173,8 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
 
             grad_clipping(model, 1)
             optimizer.step()
-            scheduler.step(l.sum())
+            if use_scheduler:
+                scheduler.step(l.sum())
 
             # tqdm 进度条更新 loss, lr
             tqdm_.set_postfix(loss=l.detach().item(), lr=optimizer.param_groups[0]['lr'])
@@ -214,7 +219,7 @@ def eval_Seq2SeqAttention(model: Seq2SeqAttention,
         # model_output : (1, dec_steps, output_size)
         # target_data  : (1, dec_steps, output_size)
         # attention_weight : (1, dec_steps, enc_steps)
-        model_output = model_output.detach().cpu().permute(1, 0, 2).squeeze()
+        model_output = model_output.detach().cpu().permute(1, 0, 2)
         target_data = target_data.cpu()
         attention_weight = attention_weight.detach().cpu().permute(1, 0, 2)
 
