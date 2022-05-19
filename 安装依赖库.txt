@@ -1,0 +1,13 @@
+pip install tushare
+pip install  dask
+sudo pip3 install llvmlite==0.31.0
+sudo pip3 install numba
+pip install plotly --upgrade
+pip install plotly_express
+pip install netcdf4
+python -m pip install "xarray[complete]"
+conda install python-eccodes -c conda-forge
+pip install ipykernel --upgrade
+pip install numba==0.53
+conda update --all
+
