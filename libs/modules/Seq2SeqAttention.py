@@ -120,6 +120,8 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
                            init_weight: bool = True,
                            use_scheduler: bool = False
                            ):
+    best_loss = 10
+    best_model = None
     def init_weights(m):
         if type(m) == nn.Linear:
             nn.init.xavier_uniform_(m.weight)
@@ -135,7 +137,11 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optimizer, mode="min", factor=0.5, patience=5,
                                                            cooldown=50)
-    loss = loss_function(loss_function_name)()
+    loss = None
+    try:
+        loss = loss_function(loss_function_name)(gamma=0.1)
+    finally:
+        loss = loss_function(loss_function_name)()
     ls = []  # 记录每一batch的loss
     model.train()
 
@@ -168,6 +174,9 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
             # Y_hat : (batch_size, dec_steps, input_size)
             Y_hat = Y_hat.permute(1, 0, 2)
             l = loss(Y_hat, Y).sum()
+            if abs(l.cpu().item()) < best_loss:
+                best_loss = abs(l.cpu().item())
+                best_model = model
             l.backward()
             ls.append(l.detach().cpu().item())
 
@@ -178,7 +187,7 @@ def train_Seq2SeqAttention(model: Seq2SeqAttention,
 
             # tqdm 进度条更新 loss, lr
             tqdm_.set_postfix(loss=l.detach().item(), lr=optimizer.param_groups[0]['lr'])
-    return model, ls
+    return best_model, ls
 
 
 def eval_Seq2SeqAttention(model: Seq2SeqAttention,
@@ -195,7 +204,7 @@ def eval_Seq2SeqAttention(model: Seq2SeqAttention,
     target_seq = []
     attention_seq = []
 
-    for model_input, target_data, _ in dataLoader:
+    for model_input, target_data, _ in tqdm(dataLoader):
         # model_input : torch.Size([enc_steps, stock_num, parameters_num])
         # target_data : torch.Size([dec_steps, stock_num, parameters_num])
 

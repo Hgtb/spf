@@ -19,24 +19,6 @@ class Seq2SeqEncoder(nn.Module):
         return out, hidden_state
 
 
-# ToDo(Alex Han) 尚未完成
-class Seq2SeqDecoder(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size):
-        super(Seq2SeqDecoder, self).__init__()
-        self.hidden_size = hidden_size
-        self.embedding = nn.Linear(in_features=output_size, out_features=hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
-        self.out = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x, hidden):
-        out = self.embedding(x).view(1, 1, -1)
-        out = F.relu(out)
-        out, hidden = self.gru(out, hidden)
-        out = self.out(out[0])
-
-        return out, hidden
-
-
 class Seq2SeqAttentionDecoder(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout=0.1):
         super(Seq2SeqAttentionDecoder, self).__init__()
@@ -86,23 +68,3 @@ class Seq2SeqAttentionDecoder(nn.Module):
 
         return out, self.attention.attention_weights, [enc_outputs, hidden_state]
 
-
-class Seq2SeqAttention(nn.Module):  # 弃用
-    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout=0.1):
-        super(Seq2SeqAttention, self).__init__()
-        self.encoder = Seq2SeqEncoder(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers,
-                                      dropout=dropout)
-        self.decoder = Seq2SeqAttentionDecoder(input_size=hidden_size, hidden_size=hidden_size, num_layers=num_layers,
-                                               dropout=dropout)
-        self.dense = nn.Sequential(
-            nn.Linear(in_features=hidden_size, out_features=output_size),
-            Permute(1, 0, 2)  # 在includes.py中实现，调用 torch.tensor 的 permute 方法实现
-        )
-
-    def forward(self, enc_X, dec_X, *args):
-        enc_outputs = self.encoder(enc_X, *args)
-        # dec_input = torch.cat([enc_outputs[0], dec_X[1:]], dim=)
-        dec_state = self.decoder.init_state(enc_outputs, *args)
-        outputs, stats = self.decoder(dec_X, dec_state)
-        outputs = self.dense(outputs)
-        return outputs, stats
