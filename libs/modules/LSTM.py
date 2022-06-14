@@ -16,3 +16,6 @@ class LSTM(nn.Module):
         x, (h_n, h_c) = self.lstm_layer(x, None)
         x = self.linear_layer(x)
         return x
+
+def trainLstm():
+

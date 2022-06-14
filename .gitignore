@@ -26,5 +26,18 @@ libs/dask-worker-space
 # information for Eclipse / Flash Builder.
 
 # data
-*.csv
+#*.csv
 *.nc
+
+# dataSet
+dataSet/
+forecastData/
+
+# Models
+Models/
+
+#tests
+#tests/
+
+# git
+.git/

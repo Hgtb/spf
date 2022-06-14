@@ -21,6 +21,7 @@ def findSameNum(target, check_list: list):
     return times
 
 
+# ToDo(Alex Han) 添加任意输出功能，可以根据输入的参数来自动输出多个值
 class DataSet:
     r"""
     生成滑动窗口数据，每步返回三个值: encoder_input, decoder_input 和 target_data
@@ -39,14 +40,15 @@ class DataSet:
 
     isel 函数：对数据进行切片，需要输入切片的开始和结束索引，以及进行切片操作的维度
     """
-    def __init__(self, data: xr.DataArray = None, dataPath: str = None,
+
+    def __init__(self, data=None, dataPath: str = None,
                  trainDays: int = 360, targetDays: int = 30,
                  encoderDecoderParameter: str = None,
                  targetDataParameter: str = "close",
                  isel: List[int] = None,  # [start_index, end_index]
                  device=None):
         self.device = device  # 自动将tensor转移device，device==None则不转移(默认使用CPU)
-        self.data: xr.DataArray = xr.DataArray([])
+        self.data = None
 
         if data is not None:
             self.data = data
@@ -89,7 +91,7 @@ class DataSet:
     def to_device(self, device: torch.device):
         self.device = device
 
-    def getData(self,  start: int, end: int, parameter: str):
+    def getData(self, start: int, end: int, parameter: str):
         data = None
         if (parameter is None) or (parameter.lower() == "all"):
             data = torch.Tensor(self.data
@@ -125,13 +127,15 @@ class DataSet:
         r"""
         :return: torch.Size([decoder_steps, stocksNum, parameter_size]) like torch.Size([30, 1440, 1])
         """
-        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays, parameter=self.encoderDecoderParameter)
+        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays,
+                            parameter=self.encoderDecoderParameter)
 
     def getTargetData(self, item: int):
         r"""
         :return: torch.Size([target_steps, stocksNum, parameter_size]) like torch.Size([30, 1440, 1])
         """
-        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays, parameter=self.targetDataParameter)
+        return self.getData(start=item + self.trainDays, end=item + self.trainDays + self.targetDays,
+                            parameter=self.targetDataParameter)
 
     def __getitem__(self, item):
         return self.getEncoderInput(item), self.getDecoderInput(item), self.getTargetData(item)

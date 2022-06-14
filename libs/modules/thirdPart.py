@@ -24,39 +24,6 @@ def grad_clipping(net, theta):
             param.grad[:] *= theta / norm
 
 
-#  from d2l
-def sequence_mask(X, valid_len, value=0):
-    """Mask irrelevant entries in sequences.
-
-    Defined in :numref:`sec_seq2seq_decoder`"""
-    maxlen = X.size(1)
-    mask = torch.arange((maxlen), dtype=torch.float32,
-                        device=X.device)[None, :] < valid_len[:, None]
-    X[~mask] = value
-    return X
-
-
-#  from d2l
-def masked_softmax(X, valid_lens):
-    """Perform softmax operation by masking elements on the last axis.
-
-    Defined in :numref:`sec_attention-scoring-functions`"""
-    # `X`: 3D tensor, `valid_lens`: 1D or 2D tensor
-    if valid_lens is None:
-        return nn.functional.softmax(X, dim=-1)
-    else:
-        shape = X.shape
-        if valid_lens.dim() == 1:
-            valid_lens = torch.repeat_interleave(valid_lens, shape[1])
-        else:
-            valid_lens = valid_lens.reshape(-1)
-        # On the last axis, replace masked elements with a very large negative
-        # value, whose exponentiation outputs 0
-        X = sequence_mask(X.reshape(-1, shape[-1]), valid_lens,
-                              value=-1e6)
-        return nn.functional.softmax(X.reshape(shape), dim=-1)
-
-
 # from d2l
 class AdditiveAttention(nn.Module):
     """Additive attention.
@@ -71,15 +38,19 @@ class AdditiveAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.attention_weights = None
 
-    def forward(self, queries, keys, values, valid_lens=None):
+    def forward(self, queries, keys, values):
         """
         :param queries: (`batch_size`, no. of queries, 1, `num_hiddens`)
         :param keys: (`batch_size`, 1, no. of key-value pairs, `num_hiddens`)
         :param values:
-        :param valid_lens:
         :return:
         """
-        queries, keys = self.W_q(queries), self.W_k(keys)
+        # print("queries : ", queries.size())
+        queries = self.W_q(queries)
+        # print("queries : ", queries.size())
+        # print("keys : ", keys.size())
+        keys = self.W_k(keys)
+        # print("keys : ", keys.size())
         # After dimension expansion, shape of `queries`: (`batch_size`, no. of
         # queries, 1, `num_hiddens`) and shape of `keys`: (`batch_size`, 1,
         # no. of key-value pairs, `num_hiddens`). Sum them up with
@@ -94,9 +65,8 @@ class AdditiveAttention(nn.Module):
         # del features
         # torch.cuda.empty_cache()
 
-        self.attention_weights = masked_softmax(scores, valid_lens)
-        # Shape of `values`: (`batch_size`, no. of key-value pairs, value
-        # dimension)
+        self.attention_weights = nn.functional.softmax(scores, dim=-1)
+        # Shape of `values`: (`batch_size`, no. of key-value pairs, value dimension)
         return torch.bmm(self.dropout(self.attention_weights), values)
 
 

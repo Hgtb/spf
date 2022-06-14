@@ -3,7 +3,7 @@ from libs.modules.thirdPart import AdditiveAttention, dilate_loss, MyTimer
 from libs.modules.soft_dtw_cuda import SoftDTW
 from libs.dataLoader import DataLoader
 from libs.modules.ResNet import *
-from libs.modules.Seq2Seq import *
+from libs.modules.Encoder_AttentionDecoder import *
 
 
 class ResNetSeq2SeqAttention(nn.Module):

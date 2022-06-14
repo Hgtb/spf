@@ -1,6 +1,6 @@
 import torch
 from libs.modules.includes import *
-from libs.modules.Seq2Seq import *
+from libs.modules.Encoder_AttentionDecoder import *
 from libs.modules.Loss import *
 from libs.modules.thirdPart import grad_clipping
 
